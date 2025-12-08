@@ -1,4 +1,3 @@
-customtkinter
+streamlit
 Pillow
 translitua
-pyinstaller
