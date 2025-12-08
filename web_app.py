@@ -82,18 +82,17 @@ with st.sidebar:
     st.subheader("1. Назва файлів")
     prefix = st.text_input("Префікс (необов'язково)", placeholder="напр. vidpustka")
     
-    # 2. Розміри (ЗМІНЕНО НА ПОВЗУНОК)
+    # 2. Розміри
     st.subheader("2. Розміри та Якість")
     resize_enabled = st.checkbox("Зменшувати розмір", value=True)
     
     max_dim = 0
     if resize_enabled:
-        max_dim = st.slider(
+        # ЗМІНЕНО: Використовуємо select_slider для фіксованих значень
+        max_dim = st.select_slider(
             "Макс. сторона (px)", 
-            min_value=500, 
-            max_value=4000, 
-            value=1920, 
-            step=50
+            options=[800, 1024, 1280, 1920, 3840], 
+            value=3840
         )
     
     quality = st.slider("Якість JPEG", 70, 100, 80, 5)
