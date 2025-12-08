@@ -1,19 +1,4 @@
-# Тимчасові файли Python
 __pycache__/
 *.py[cod]
-
-# Віртуальне середовище (якщо є)
 venv/
-env/
-
-# Файли збірки PyInstaller (дуже важливо!)
-build/
-dist/
-*.spec
-
-# Локальні налаштування (якщо не хочете ділитися ними)
-# config.json
-
-# Файли IDE (VS Code, PyCharm)
-.vscode/
-.idea/
+.streamlit/
