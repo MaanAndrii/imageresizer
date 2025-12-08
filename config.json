@@ -1,0 +1,21 @@
+{
+  "path_settings": {
+    "default_input_path": "",
+    "default_output_path": ""
+  },
+  "resize_settings": {
+    "resize_images_default": true,
+    "max_dimension_default": 3840
+  },
+  "watermark_settings": {
+    "default_watermark_filename": "watermark.png",
+    "apply_watermark_default": false,
+    "watermark_scale": 0.15,
+    "margin": 15,
+    "position_default": "bottom-right"
+  },
+  "output_settings": {
+    "quality_default": 80,
+    "default_prefix": ""
+  }
+}
