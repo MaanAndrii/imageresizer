@@ -12,14 +12,17 @@ st.set_page_config(page_title="Watermarker Pro", page_icon="📸", layout="wide"
 # --- Логіка (Без змін) ---
 def get_safe_filename(original_filename, prefix="", extension="jpg"):
     name_only = original_filename.rsplit('.', 1)[0]
+    # Додаємо мікросекунди (%f), щоб імена були унікальні навіть в одну секунду
+    timestamp = datetime.now().strftime('%H%M%S_%f')[:9] 
+    
     if prefix:
         clean_prefix = re.sub(r'[\s\W_]+', '-', translit(prefix).lower()).strip('-')
-        return f"{clean_prefix}_{datetime.now().strftime('%H%M%S')}.{extension}"
+        return f"{clean_prefix}_{timestamp}.{extension}"
     else:
         slug = translit(name_only).lower()
         slug = re.sub(r'[\s\W_]+', '-', slug).strip('-')
         if not slug: slug = "image"
-        return f"{slug}.{extension}"
+        return f"{slug}_{timestamp}.{extension}" # Також додаємо час сюди
 
 def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings, output_format):
     uploaded_file.seek(0)
