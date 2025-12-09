@@ -6,10 +6,10 @@ import zipfile
 from datetime import datetime
 import re
 
-# --- ВАЖЛИВО: Вмикаємо широкий режим для 3-х колонок ---
+# Налаштування сторінки
 st.set_page_config(page_title="Watermarker Pro", page_icon="📸", layout="wide")
 
-# --- Логіка обробки (Без змін) ---
+# --- Логіка (Без змін) ---
 def get_safe_filename(original_filename, prefix="", extension="jpg"):
     name_only = original_filename.rsplit('.', 1)[0]
     if prefix:
@@ -77,7 +77,6 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
     elif output_format == "PNG":
         img.save(output_buffer, format="PNG", optimize=True)
 
-    # Запобіжник збільшення розміру (для JPEG)
     is_jpeg = (uploaded_file.name.lower().endswith(('.jpg', '.jpeg')) and output_format == "JPEG")
     if not wm_image and is_jpeg and output_buffer.getbuffer().nbytes > original_size:
         uploaded_file.seek(0)
@@ -90,7 +89,6 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
 st.title("📸 Watermarker Pro")
 st.markdown("---")
 
-# Створюємо 3 колонки: Ліва (вужча), Центральна (ширша), Права (вужча)
 col_settings, col_upload, col_preview = st.columns([1, 1.5, 1], gap="medium")
 
 # ==========================
@@ -144,8 +142,12 @@ with col_upload:
             
             progress_bar = st.progress(0)
             status_text = st.empty()
+            
             zip_buffer = io.BytesIO()
             wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
+            
+            # Список для окремого завантаження
+            processed_results = []
 
             with zipfile.ZipFile(zip_buffer, "w") as zf:
                 total_files = len(uploaded_files)
@@ -158,7 +160,12 @@ with col_upload:
                         )
                         ext = out_fmt.lower()
                         new_name = get_safe_filename(file.name, prefix, ext)
+                        
+                        # 1. Додаємо в ZIP
                         zf.writestr(new_name, processed_bytes)
+                        # 2. Додаємо в список для окремих кнопок
+                        processed_results.append((new_name, processed_bytes))
+                        
                     except Exception as e:
                         st.error(f"Помилка: {e}")
                     progress_bar.progress((i + 1) / total_files)
@@ -166,15 +173,36 @@ with col_upload:
             progress_bar.progress(100)
             status_text.success("Готово!")
             
+            # --- КНОПКА ZIP ---
             zip_buffer.seek(0)
             st.download_button(
-                label="📦 Завантажити ZIP-архів",
+                label="📦 Завантажити все архівом (ZIP)",
                 data=zip_buffer,
                 file_name=f"processed_{datetime.now().strftime('%H%M')}.zip",
                 mime="application/zip",
                 type="primary",
                 use_container_width=True
             )
+            
+            # --- ОКРЕМІ ФАЙЛИ (НОВЕ) ---
+            st.divider()
+            with st.expander("📂 Завантажити файли окремо"):
+                for p_name, p_bytes in processed_results:
+                    # Рядок: Мініатюра | Назва | Кнопка
+                    r1, r2, r3 = st.columns([1, 3, 2], vertical_alignment="center")
+                    with r1:
+                        st.image(p_bytes, width=50)
+                    with r2:
+                        st.write(f"**{p_name}**")
+                        st.caption(f"{len(p_bytes)/1024:.1f} KB")
+                    with r3:
+                        st.download_button(
+                            label="⬇️ Скачати",
+                            data=p_bytes,
+                            file_name=p_name,
+                            mime=f"image/{out_fmt.lower()}",
+                            key=f"dl_{p_name}"
+                        )
 
 # ==========================
 # 3. ПРАВИЙ СТОВПЕЦЬ: ПРОГНОЗ
@@ -183,11 +211,16 @@ with col_preview:
     st.header("📊 Прогноз")
     
     if uploaded_files:
-        # Беремо перше фото для аналізу
-        sample_file = uploaded_files[0]
+        # --- НОВЕ: ВИБІР ФАЙЛУ ДЛЯ ПРЕВ'Ю ---
+        file_names = [f.name for f in uploaded_files]
+        selected_file_name = st.selectbox("Файл для огляду:", file_names)
+        
+        # Знаходимо об'єкт файлу за іменем
+        sample_file = next(f for f in uploaded_files if f.name == selected_file_name)
+        
         wm_obj_sample = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
         
-        # Обробляємо його "на льоту"
+        # Обробляємо "на льоту"
         try:
             with st.spinner("Аналізуємо..."):
                 result_bytes = process_single_image(
@@ -208,10 +241,9 @@ with col_preview:
                 "Розмір після", 
                 f"{new_size/1024:.1f} KB",
                 f"{delta_percent:.1f}%",
-                delta_color="inverse" # Зелений, якщо менше
+                delta_color="inverse"
             )
             
-            # --- ГРАФІК ЕКОНОМІЇ ---
             if new_size < orig_size:
                 saved_ratio = 1.0 - (new_size / orig_size)
                 st.write("Економія місця:")
@@ -219,12 +251,10 @@ with col_preview:
             else:
                 st.warning("Розмір збільшився")
 
-            # --- ПРЕВ'Ю (КАРТИНКА) ---
             st.write("Попередній перегляд:")
-            # Показуємо картинку прямо з пам'яті
-            st.image(result_bytes, caption="Результат", use_container_width=True)
+            st.image(result_bytes, caption=f"Результат: {selected_file_name}", use_container_width=True)
 
         except Exception as e:
             st.error("Неможливо створити прев'ю")
     else:
-        st.info("Додайте фото, щоб побачити прогноз розміру та результату.")
+        st.info("Додайте фото, щоб побачити прогноз.")
