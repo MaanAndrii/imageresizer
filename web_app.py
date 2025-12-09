@@ -123,6 +123,14 @@ with col_settings:
             wm_settings['scale'] = st.slider("Масштаб (%)", 5, 50, 15) / 100
             wm_settings['margin'] = st.slider("Відступ (px)", 0, 100, 15)
 
+    # --- ДОДАНО: ІНФОРМАЦІЯ ПРО АВТОРА ---
+    st.markdown("---")
+    st.caption("ℹ️ Про програму")
+    st.markdown("**Author:** Marynyuk Andriy")
+    st.markdown("**License:** GNU GPLv3")
+    st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
+    st.markdown("© 2025 All rights reserved")
+
 # ==========================
 # 2. ЦЕНТРАЛЬНИЙ СТОВПЕЦЬ: ЗАВАНТАЖЕННЯ
 # ==========================
@@ -147,8 +155,6 @@ with col_upload:
             wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
             
             processed_results = []
-            
-            # Змінні для статистики
             total_orig_size = 0
             total_new_size = 0
 
@@ -156,8 +162,6 @@ with col_upload:
                 total_files = len(uploaded_files)
                 for i, file in enumerate(uploaded_files):
                     status_text.text(f"Обробка: {file.name}...")
-                    
-                    # Рахуємо вхідний розмір
                     total_orig_size += file.getbuffer().nbytes
                     
                     try:
@@ -165,8 +169,6 @@ with col_upload:
                             file, wm_obj, max_dim, quality, 
                             wm_settings if wm_obj else None, out_fmt
                         )
-                        
-                        # Рахуємо вихідний розмір
                         total_new_size += len(processed_bytes)
                         
                         ext = out_fmt.lower()
@@ -182,7 +184,6 @@ with col_upload:
             progress_bar.progress(100)
             status_text.success("Готово!")
             
-            # --- НОВЕ: ПІДСУМКОВА СТАТИСТИКА ---
             saved_size = total_orig_size - total_new_size
             saved_mb = saved_size / (1024 * 1024)
             saved_percent = (saved_size / total_orig_size) * 100 if total_orig_size > 0 else 0
@@ -192,7 +193,6 @@ with col_upload:
                 f"**{total_orig_size/1024/1024:.1f} MB** до **{total_new_size/1024/1024:.1f} MB**.\n\n"
                 f"✂️ Економія: **{saved_mb:.1f} MB ({saved_percent:.0f}%)**"
             )
-            # -----------------------------------
             
             zip_buffer.seek(0)
             st.download_button(
@@ -234,7 +234,6 @@ with col_preview:
         
         sample_file = next(f for f in uploaded_files if f.name == selected_file_name)
         
-        # Відкриваємо оригінал для отримання розмірів
         sample_file.seek(0)
         original_img = Image.open(sample_file)
         orig_w, orig_h = original_img.size
@@ -251,18 +250,16 @@ with col_preview:
             orig_size = sample_file.getbuffer().nbytes
             new_size = len(result_bytes)
             
-            # --- НОВЕ: РОЗМІРИ В ПІКСЕЛЯХ ---
             st.write("**Оригінал:**")
             col_res1, col_res2 = st.columns(2)
             col_res1.metric("Вага", f"{orig_size/1024:.1f} KB")
             col_res2.metric("Розмір", f"{orig_w} x {orig_h}")
             
-            # --- МЕТРИКИ ЗМІН ---
             delta_percent = ((new_size - orig_size) / orig_size) * 100
             
             st.divider()
             st.metric(
-                "Прогнозована вага", 
+                "Прогноз (Вага)", 
                 f"{new_size/1024:.1f} KB",
                 f"{delta_percent:.1f}%",
                 delta_color="inverse"
