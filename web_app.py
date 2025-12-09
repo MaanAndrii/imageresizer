@@ -6,9 +6,10 @@ import zipfile
 from datetime import datetime
 import re
 
-st.set_page_config(page_title="Watermarker Web", page_icon="📸", layout="centered")
+# --- ВАЖЛИВО: Вмикаємо широкий режим для 3-х колонок ---
+st.set_page_config(page_title="Watermarker Pro", page_icon="📸", layout="wide")
 
-# --- Функції (оновлені для форматів) ---
+# --- Логіка обробки (Без змін) ---
 def get_safe_filename(original_filename, prefix="", extension="jpg"):
     name_only = original_filename.rsplit('.', 1)[0]
     if prefix:
@@ -24,7 +25,6 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
     uploaded_file.seek(0)
     img = Image.open(uploaded_file)
     
-    # Конвертація для збереження (JPEG не вміє в прозорість)
     if output_format == "JPEG":
         img = img.convert("RGB")
     else:
@@ -60,7 +60,6 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         elif position == 'top-left': x, y = margin, margin
         elif position == 'center': x, y = (img.width - wm_resized.width) // 2, (img.height - wm_resized.height) // 2
         
-        # Для коректного накладання вотермарки на RGB зображення
         if img.mode != 'RGBA':
             img = img.convert('RGBA')
             img.paste(wm_resized, (x, y), wm_resized)
@@ -71,7 +70,6 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
 
     # 3. Збереження
     output_buffer = io.BytesIO()
-    
     if output_format == "JPEG":
         img.save(output_buffer, format="JPEG", quality=quality, optimize=True)
     elif output_format == "WEBP":
@@ -79,10 +77,9 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
     elif output_format == "PNG":
         img.save(output_buffer, format="PNG", optimize=True)
 
-    # 4. Перевірка розміру (тільки якщо без вотермарки і не змінено формат)
-    is_same_format = (uploaded_file.name.lower().endswith('.jpg') or uploaded_file.name.lower().endswith('.jpeg')) and output_format == "JPEG"
-    
-    if not wm_image and is_same_format and output_buffer.getbuffer().nbytes > original_size:
+    # Запобіжник збільшення розміру (для JPEG)
+    is_jpeg = (uploaded_file.name.lower().endswith(('.jpg', '.jpeg')) and output_format == "JPEG")
+    if not wm_image and is_jpeg and output_buffer.getbuffer().nbytes > original_size:
         uploaded_file.seek(0)
         return uploaded_file.read()
         
@@ -90,146 +87,144 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
 
 # --- ІНТЕРФЕЙС ---
 
-st.title("📸 Smart Resizer & Watermarker")
+st.title("📸 Watermarker Pro")
+st.markdown("---")
 
-# === ГОЛОВНА ЧАСТИНА: ЗАВАНТАЖЕННЯ ===
-uploaded_files = st.file_uploader(
-    "📤 Крок 1. Виберіть фотографії", 
-    type=['png', 'jpg', 'jpeg', 'bmp', 'webp'], 
-    accept_multiple_files=True
-)
+# Створюємо 3 колонки: Ліва (вужча), Центральна (ширша), Права (вужча)
+col_settings, col_upload, col_preview = st.columns([1, 1.5, 1], gap="medium")
 
-# === САЙДБАР (НАЛАШТУВАННЯ) ===
-with st.sidebar:
-    st.header("⚙️ Налаштування")
+# ==========================
+# 1. ЛІВИЙ СТОВПЕЦЬ: НАЛАШТУВАННЯ
+# ==========================
+with col_settings:
+    st.header("⚙️ Опції")
     
-    # 1. Формат (НОВЕ)
-    st.subheader("1. Вихідний формат")
-    out_fmt = st.selectbox("Формат файлу", ["JPEG", "WEBP", "PNG"], help="WEBP дає найкраще стиснення")
+    with st.container(border=True):
+        st.subheader("Формат та Ім'я")
+        out_fmt = st.selectbox("Вихідний формат", ["JPEG", "WEBP", "PNG"])
+        prefix = st.text_input("Префікс файлу", placeholder="напр. photo_edit")
     
-    # 2. Назва
-    st.subheader("2. Назва файлів")
-    prefix = st.text_input("Префікс", placeholder="напр. photo")
-    
-    # 3. Розміри
-    st.subheader("3. Розміри та Якість")
-    resize_enabled = st.checkbox("Зменшувати розмір", value=True)
-    max_dim = 0
-    if resize_enabled:
-        max_dim = st.select_slider("Макс. сторона (px)", options=[800, 1024, 1280, 1920, 3840], value=1920)
-    
-    quality = 80
-    if out_fmt != "PNG":
-        quality = st.slider("Якість", 50, 100, 80, 5)
-
-    # 4. Вотермарка
-    st.subheader("4. Водяний знак")
-    wm_file_upload = st.file_uploader("Логотип (PNG)", type=["png"])
-    
-    wm_settings = {}
-    if wm_file_upload:
-        wm_settings['position'] = st.selectbox("Позиція", ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center'])
-        wm_settings['scale'] = st.slider("Розмір (%)", 5, 50, 15) / 100
-        wm_settings['margin'] = st.slider("Відступ (px)", 0, 100, 15)
-
-    # === КАЛЬКУЛЯТОР ЕКОНОМІЇ (НОВЕ) ===
-    if uploaded_files:
-        st.markdown("---")
-        st.subheader("📊 Прогноз економії")
+    with st.container(border=True):
+        st.subheader("Розміри")
+        resize_enabled = st.checkbox("Зменшувати розмір", value=True)
+        max_dim = 0
+        if resize_enabled:
+            max_dim = st.select_slider("Макс. сторона (px)", options=[800, 1024, 1280, 1920, 3840], value=1920)
         
-        # Беремо перше фото для тесту
+        quality = 80
+        if out_fmt != "PNG":
+            quality = st.slider("Якість стиснення", 50, 100, 80, 5)
+
+    with st.container(border=True):
+        st.subheader("Водяний знак")
+        wm_file_upload = st.file_uploader("Завантажити лого (PNG)", type=["png"])
+        
+        wm_settings = {}
+        if wm_file_upload:
+            wm_settings['position'] = st.selectbox("Розміщення", ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center'])
+            wm_settings['scale'] = st.slider("Масштаб (%)", 5, 50, 15) / 100
+            wm_settings['margin'] = st.slider("Відступ (px)", 0, 100, 15)
+
+# ==========================
+# 2. ЦЕНТРАЛЬНИЙ СТОВПЕЦЬ: ЗАВАНТАЖЕННЯ
+# ==========================
+with col_upload:
+    st.header("📤 Завантаження")
+    
+    uploaded_files = st.file_uploader(
+        "Перетягніть фото сюди", 
+        type=['png', 'jpg', 'jpeg', 'bmp', 'webp'], 
+        accept_multiple_files=True
+    )
+
+    if uploaded_files:
+        st.success(f"Вибрано файлів: {len(uploaded_files)}")
+        
+        if st.button(f"🚀 Обробити та Скачати", type="primary", use_container_width=True):
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            zip_buffer = io.BytesIO()
+            wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
+
+            with zipfile.ZipFile(zip_buffer, "w") as zf:
+                total_files = len(uploaded_files)
+                for i, file in enumerate(uploaded_files):
+                    status_text.text(f"Обробка: {file.name}...")
+                    try:
+                        processed_bytes = process_single_image(
+                            file, wm_obj, max_dim, quality, 
+                            wm_settings if wm_obj else None, out_fmt
+                        )
+                        ext = out_fmt.lower()
+                        new_name = get_safe_filename(file.name, prefix, ext)
+                        zf.writestr(new_name, processed_bytes)
+                    except Exception as e:
+                        st.error(f"Помилка: {e}")
+                    progress_bar.progress((i + 1) / total_files)
+            
+            progress_bar.progress(100)
+            status_text.success("Готово!")
+            
+            zip_buffer.seek(0)
+            st.download_button(
+                label="📦 Завантажити ZIP-архів",
+                data=zip_buffer,
+                file_name=f"processed_{datetime.now().strftime('%H%M')}.zip",
+                mime="application/zip",
+                type="primary",
+                use_container_width=True
+            )
+
+# ==========================
+# 3. ПРАВИЙ СТОВПЕЦЬ: ПРОГНОЗ
+# ==========================
+with col_preview:
+    st.header("📊 Прогноз")
+    
+    if uploaded_files:
+        # Беремо перше фото для аналізу
         sample_file = uploaded_files[0]
         wm_obj_sample = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
         
-        # Обробляємо його
+        # Обробляємо його "на льоту"
         try:
-            sample_result = process_single_image(
-                sample_file, wm_obj_sample, max_dim, quality, 
-                wm_settings if wm_obj_sample else None, out_fmt
-            )
+            with st.spinner("Аналізуємо..."):
+                result_bytes = process_single_image(
+                    sample_file, wm_obj_sample, max_dim, quality, 
+                    wm_settings if wm_obj_sample else None, out_fmt
+                )
             
             orig_size = sample_file.getbuffer().nbytes
-            new_size = len(sample_result)
+            new_size = len(result_bytes)
             
-            # Відображаємо метрики
-            col1, col2 = st.columns(2)
-            col1.metric("Було", f"{orig_size/1024:.1f} KB")
+            # --- МЕТРИКИ ---
+            st.metric("Розмір до", f"{orig_size/1024:.1f} KB")
             
-            # Розрахунок дельти (зелена якщо менше, червона якщо більше)
-            delta_color = "normal" 
-            if new_size < orig_size: delta_color = "inverse" # зелений у streamlit
+            delta_val = new_size - orig_size
+            delta_percent = (delta_val / orig_size) * 100
             
-            col2.metric(
-                "Стало", 
-                f"{new_size/1024:.1f} KB", 
-                f"{((new_size - orig_size) / orig_size) * 100:.1f}%",
-                delta_color="normal" if new_size > orig_size else "inverse"
+            st.metric(
+                "Розмір після", 
+                f"{new_size/1024:.1f} KB",
+                f"{delta_percent:.1f}%",
+                delta_color="inverse" # Зелений, якщо менше
             )
             
-            # Візуальна шкала
+            # --- ГРАФІК ЕКОНОМІЇ ---
             if new_size < orig_size:
-                saved_percent = 1.0 - (new_size / orig_size)
-                st.write(f"Виграш місця: **{saved_percent*100:.1f}%**")
-                st.progress(saved_percent)
+                saved_ratio = 1.0 - (new_size / orig_size)
+                st.write("Економія місця:")
+                st.progress(saved_ratio)
             else:
-                st.warning("Файл може збільшитися (змініть формат або якість)")
-                
+                st.warning("Розмір збільшився")
+
+            # --- ПРЕВ'Ю (КАРТИНКА) ---
+            st.write("Попередній перегляд:")
+            # Показуємо картинку прямо з пам'яті
+            st.image(result_bytes, caption="Результат", use_container_width=True)
+
         except Exception as e:
-            st.error("Помилка попереднього перегляду")
-
-# === ЗАПУСК ОБРОБКИ ===
-
-if uploaded_files:
-    if st.button(f"🚀 Обробити всі зображення ({len(uploaded_files)} шт)", type="primary"):
-        
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        total_orig_size = 0
-        total_new_size = 0
-        
-        zip_buffer = io.BytesIO()
-        wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
-
-        with zipfile.ZipFile(zip_buffer, "w") as zf:
-            total_files = len(uploaded_files)
-            
-            for i, file in enumerate(uploaded_files):
-                status_text.text(f"Обробка: {file.name}...")
-                total_orig_size += file.getbuffer().nbytes
-                
-                try:
-                    processed_bytes = process_single_image(
-                        file, wm_obj, max_dim, quality, 
-                        wm_settings if wm_obj else None, out_fmt
-                    )
-                    
-                    total_new_size += len(processed_bytes)
-                    
-                    # Визначаємо розширення
-                    ext = "jpg"
-                    if out_fmt == "PNG": ext = "png"
-                    elif out_fmt == "WEBP": ext = "webp"
-                    
-                    new_name = get_safe_filename(file.name, prefix, ext)
-                    zf.writestr(new_name, processed_bytes)
-                    
-                except Exception as e:
-                    st.error(f"Помилка: {e}")
-                
-                progress_bar.progress((i + 1) / total_files)
-        
-        progress_bar.progress(100)
-        status_text.success("✅ Готово!")
-        
-        # === ПІДСУМКОВА СТАТИСТИКА ===
-        st.success(f"Загальний розмір зменшено з **{total_orig_size/1024/1024:.2f} MB** до **{total_new_size/1024/1024:.2f} MB**")
-        
-        zip_buffer.seek(0)
-        st.download_button(
-            label="⬇️ Завантажити ZIP-архів",
-            data=zip_buffer,
-            file_name=f"processed_{datetime.now().strftime('%H%M')}.zip",
-            mime="application/zip",
-            type="primary"
-        )
+            st.error("Неможливо створити прев'ю")
+    else:
+        st.info("Додайте фото, щоб побачити прогноз розміру та результату.")
