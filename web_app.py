@@ -9,11 +9,11 @@ import re
 # Налаштування сторінки
 st.set_page_config(page_title="Watermarker Pro", page_icon="📸", layout="wide")
 
-# --- Логіка (Без змін) ---
+# --- Логіка ---
 def get_safe_filename(original_filename, prefix="", extension="jpg"):
     name_only = original_filename.rsplit('.', 1)[0]
-    # Додаємо мікросекунди (%f), щоб імена були унікальні навіть в одну секунду
-    timestamp = datetime.now().strftime('%H%M%S_%f')[:9] 
+    # Додаємо мікросекунди для унікальності імені файлу
+    timestamp = datetime.now().strftime('%H%M%S_%f')[:9]
     
     if prefix:
         clean_prefix = re.sub(r'[\s\W_]+', '-', translit(prefix).lower()).strip('-')
@@ -22,7 +22,7 @@ def get_safe_filename(original_filename, prefix="", extension="jpg"):
         slug = translit(name_only).lower()
         slug = re.sub(r'[\s\W_]+', '-', slug).strip('-')
         if not slug: slug = "image"
-        return f"{slug}_{timestamp}.{extension}" # Також додаємо час сюди
+        return f"{slug}_{timestamp}.{extension}"
 
 def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings, output_format):
     uploaded_file.seek(0)
@@ -126,7 +126,6 @@ with col_settings:
             wm_settings['scale'] = st.slider("Масштаб (%)", 5, 50, 15) / 100
             wm_settings['margin'] = st.slider("Відступ (px)", 0, 100, 15)
 
-    # --- ДОДАНО: ІНФОРМАЦІЯ ПРО АВТОРА ---
     st.markdown("---")
     st.caption("ℹ️ Про програму")
     st.markdown("**Author:** Marynyuk Andriy")
@@ -209,7 +208,8 @@ with col_upload:
             
             st.divider()
             with st.expander("📂 Завантажити файли окремо"):
-                for p_name, p_bytes in processed_results:
+                # ВИПРАВЛЕННЯ: Використовуємо enumerate для унікальних ключів
+                for idx, (p_name, p_bytes) in enumerate(processed_results):
                     r1, r2, r3 = st.columns([1, 3, 2], vertical_alignment="center")
                     with r1:
                         st.image(p_bytes, width=50)
@@ -222,7 +222,8 @@ with col_upload:
                             data=p_bytes,
                             file_name=p_name,
                             mime=f"image/{out_fmt.lower()}",
-                            key=f"dl_{p_name}"
+                            # КЛЮЧОВЕ ВИПРАВЛЕННЯ ТУТ:
+                            key=f"dl_{idx}_{p_name}" 
                         )
 
 # ==========================
