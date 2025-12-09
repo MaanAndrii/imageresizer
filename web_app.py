@@ -146,24 +146,33 @@ with col_upload:
             zip_buffer = io.BytesIO()
             wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
             
-            # Список для окремого завантаження
             processed_results = []
+            
+            # Змінні для статистики
+            total_orig_size = 0
+            total_new_size = 0
 
             with zipfile.ZipFile(zip_buffer, "w") as zf:
                 total_files = len(uploaded_files)
                 for i, file in enumerate(uploaded_files):
                     status_text.text(f"Обробка: {file.name}...")
+                    
+                    # Рахуємо вхідний розмір
+                    total_orig_size += file.getbuffer().nbytes
+                    
                     try:
                         processed_bytes = process_single_image(
                             file, wm_obj, max_dim, quality, 
                             wm_settings if wm_obj else None, out_fmt
                         )
+                        
+                        # Рахуємо вихідний розмір
+                        total_new_size += len(processed_bytes)
+                        
                         ext = out_fmt.lower()
                         new_name = get_safe_filename(file.name, prefix, ext)
                         
-                        # 1. Додаємо в ZIP
                         zf.writestr(new_name, processed_bytes)
-                        # 2. Додаємо в список для окремих кнопок
                         processed_results.append((new_name, processed_bytes))
                         
                     except Exception as e:
@@ -173,7 +182,18 @@ with col_upload:
             progress_bar.progress(100)
             status_text.success("Готово!")
             
-            # --- КНОПКА ZIP ---
+            # --- НОВЕ: ПІДСУМКОВА СТАТИСТИКА ---
+            saved_size = total_orig_size - total_new_size
+            saved_mb = saved_size / (1024 * 1024)
+            saved_percent = (saved_size / total_orig_size) * 100 if total_orig_size > 0 else 0
+            
+            st.info(
+                f"📊 **Результат:** Загальний розмір зменшено з "
+                f"**{total_orig_size/1024/1024:.1f} MB** до **{total_new_size/1024/1024:.1f} MB**.\n\n"
+                f"✂️ Економія: **{saved_mb:.1f} MB ({saved_percent:.0f}%)**"
+            )
+            # -----------------------------------
+            
             zip_buffer.seek(0)
             st.download_button(
                 label="📦 Завантажити все архівом (ZIP)",
@@ -184,11 +204,9 @@ with col_upload:
                 use_container_width=True
             )
             
-            # --- ОКРЕМІ ФАЙЛИ (НОВЕ) ---
             st.divider()
             with st.expander("📂 Завантажити файли окремо"):
                 for p_name, p_bytes in processed_results:
-                    # Рядок: Мініатюра | Назва | Кнопка
                     r1, r2, r3 = st.columns([1, 3, 2], vertical_alignment="center")
                     with r1:
                         st.image(p_bytes, width=50)
@@ -211,16 +229,18 @@ with col_preview:
     st.header("📊 Прогноз")
     
     if uploaded_files:
-        # --- НОВЕ: ВИБІР ФАЙЛУ ДЛЯ ПРЕВ'Ю ---
         file_names = [f.name for f in uploaded_files]
         selected_file_name = st.selectbox("Файл для огляду:", file_names)
         
-        # Знаходимо об'єкт файлу за іменем
         sample_file = next(f for f in uploaded_files if f.name == selected_file_name)
+        
+        # Відкриваємо оригінал для отримання розмірів
+        sample_file.seek(0)
+        original_img = Image.open(sample_file)
+        orig_w, orig_h = original_img.size
         
         wm_obj_sample = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
         
-        # Обробляємо "на льоту"
         try:
             with st.spinner("Аналізуємо..."):
                 result_bytes = process_single_image(
@@ -231,14 +251,18 @@ with col_preview:
             orig_size = sample_file.getbuffer().nbytes
             new_size = len(result_bytes)
             
-            # --- МЕТРИКИ ---
-            st.metric("Розмір до", f"{orig_size/1024:.1f} KB")
+            # --- НОВЕ: РОЗМІРИ В ПІКСЕЛЯХ ---
+            st.write("**Оригінал:**")
+            col_res1, col_res2 = st.columns(2)
+            col_res1.metric("Вага", f"{orig_size/1024:.1f} KB")
+            col_res2.metric("Розмір", f"{orig_w} x {orig_h}")
             
-            delta_val = new_size - orig_size
-            delta_percent = (delta_val / orig_size) * 100
+            # --- МЕТРИКИ ЗМІН ---
+            delta_percent = ((new_size - orig_size) / orig_size) * 100
             
+            st.divider()
             st.metric(
-                "Розмір після", 
+                "Прогнозована вага", 
                 f"{new_size/1024:.1f} KB",
                 f"{delta_percent:.1f}%",
                 delta_color="inverse"
@@ -246,11 +270,8 @@ with col_preview:
             
             if new_size < orig_size:
                 saved_ratio = 1.0 - (new_size / orig_size)
-                st.write("Економія місця:")
                 st.progress(saved_ratio)
-            else:
-                st.warning("Розмір збільшився")
-
+            
             st.write("Попередній перегляд:")
             st.image(result_bytes, caption=f"Результат: {selected_file_name}", use_container_width=True)
 
