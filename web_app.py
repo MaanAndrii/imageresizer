@@ -9,12 +9,10 @@ import re
 # Налаштування сторінки
 st.set_page_config(page_title="Watermarker Pro", page_icon="📸", layout="wide")
 
-# --- Логіка ---
+# --- Логіка (Без змін) ---
 def get_safe_filename(original_filename, prefix="", extension="jpg"):
     name_only = original_filename.rsplit('.', 1)[0]
-    # Додаємо мікросекунди для унікальності імені файлу
     timestamp = datetime.now().strftime('%H%M%S_%f')[:9]
-    
     if prefix:
         clean_prefix = re.sub(r'[\s\W_]+', '-', translit(prefix).lower()).strip('-')
         return f"{clean_prefix}_{timestamp}.{extension}"
@@ -95,7 +93,7 @@ st.markdown("---")
 col_settings, col_upload, col_preview = st.columns([1, 1.5, 1], gap="medium")
 
 # ==========================
-# 1. ЛІВИЙ СТОВПЕЦЬ: НАЛАШТУВАННЯ
+# 1. ЛІВИЙ СТОВПЕЦЬ
 # ==========================
 with col_settings:
     st.header("⚙️ Опції")
@@ -134,7 +132,7 @@ with col_settings:
     st.markdown("© 2025 All rights reserved")
 
 # ==========================
-# 2. ЦЕНТРАЛЬНИЙ СТОВПЕЦЬ: ЗАВАНТАЖЕННЯ
+# 2. ЦЕНТРАЛЬНИЙ СТОВПЕЦЬ
 # ==========================
 with col_upload:
     st.header("📤 Завантаження")
@@ -148,17 +146,21 @@ with col_upload:
     if uploaded_files:
         st.success(f"Вибрано файлів: {len(uploaded_files)}")
         
+        # Кнопка запускає процес, результати зберігаємо в session_state
         if st.button(f"🚀 Обробити та Скачати", type="primary", use_container_width=True):
             
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            zip_buffer = io.BytesIO()
-            wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
-            
-            processed_results = []
+            # Тимчасові змінні
+            temp_results = []
             total_orig_size = 0
             total_new_size = 0
+            
+            wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
+            
+            # Створюємо ZIP у пам'яті
+            zip_buffer = io.BytesIO()
 
             with zipfile.ZipFile(zip_buffer, "w") as zf:
                 total_files = len(uploaded_files)
@@ -177,7 +179,7 @@ with col_upload:
                         new_name = get_safe_filename(file.name, prefix, ext)
                         
                         zf.writestr(new_name, processed_bytes)
-                        processed_results.append((new_name, processed_bytes))
+                        temp_results.append((new_name, processed_bytes))
                         
                     except Exception as e:
                         st.error(f"Помилка: {e}")
@@ -186,20 +188,33 @@ with col_upload:
             progress_bar.progress(100)
             status_text.success("Готово!")
             
-            saved_size = total_orig_size - total_new_size
+            # === ЗБЕРІГАЄМО РЕЗУЛЬТАТИ В session_state ===
+            st.session_state['processed_data'] = temp_results
+            st.session_state['zip_bytes'] = zip_buffer.getvalue()
+            st.session_state['stats'] = {
+                'orig': total_orig_size,
+                'new': total_new_size
+            }
+            # ============================================
+
+        # === ВІДОБРАЖЕННЯ РЕЗУЛЬТАТІВ (З ПАМ'ЯТІ) ===
+        # Цей блок виконується завжди, якщо в пам'яті є дані
+        if 'processed_data' in st.session_state and st.session_state['processed_data']:
+            
+            stats = st.session_state['stats']
+            saved_size = stats['orig'] - stats['new']
             saved_mb = saved_size / (1024 * 1024)
-            saved_percent = (saved_size / total_orig_size) * 100 if total_orig_size > 0 else 0
+            saved_percent = (saved_size / stats['orig']) * 100 if stats['orig'] > 0 else 0
             
             st.info(
                 f"📊 **Результат:** Загальний розмір зменшено з "
-                f"**{total_orig_size/1024/1024:.1f} MB** до **{total_new_size/1024/1024:.1f} MB**.\n\n"
+                f"**{stats['orig']/1024/1024:.1f} MB** до **{stats['new']/1024/1024:.1f} MB**.\n\n"
                 f"✂️ Економія: **{saved_mb:.1f} MB ({saved_percent:.0f}%)**"
             )
             
-            zip_buffer.seek(0)
             st.download_button(
                 label="📦 Завантажити все архівом (ZIP)",
-                data=zip_buffer,
+                data=st.session_state['zip_bytes'],
                 file_name=f"processed_{datetime.now().strftime('%H%M')}.zip",
                 mime="application/zip",
                 type="primary",
@@ -207,9 +222,8 @@ with col_upload:
             )
             
             st.divider()
-            with st.expander("📂 Завантажити файли окремо"):
-                # ВИПРАВЛЕННЯ: Використовуємо enumerate для унікальних ключів
-                for idx, (p_name, p_bytes) in enumerate(processed_results):
+            with st.expander("📂 Завантажити файли окремо", expanded=True):
+                for idx, (p_name, p_bytes) in enumerate(st.session_state['processed_data']):
                     r1, r2, r3 = st.columns([1, 3, 2], vertical_alignment="center")
                     with r1:
                         st.image(p_bytes, width=50)
@@ -222,18 +236,18 @@ with col_upload:
                             data=p_bytes,
                             file_name=p_name,
                             mime=f"image/{out_fmt.lower()}",
-                            # КЛЮЧОВЕ ВИПРАВЛЕННЯ ТУТ:
-                            key=f"dl_{idx}_{p_name}" 
+                            key=f"dl_{idx}_{p_name}"
                         )
 
 # ==========================
-# 3. ПРАВИЙ СТОВПЕЦЬ: ПРОГНОЗ
+# 3. ПРАВИЙ СТОВПЕЦЬ
 # ==========================
 with col_preview:
     st.header("📊 Прогноз")
     
     if uploaded_files:
         file_names = [f.name for f in uploaded_files]
+        # Запам'ятовуємо вибір користувача в selectbox також
         selected_file_name = st.selectbox("Файл для огляду:", file_names)
         
         sample_file = next(f for f in uploaded_files if f.name == selected_file_name)
