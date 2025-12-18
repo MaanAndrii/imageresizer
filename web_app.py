@@ -41,10 +41,10 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
     uploaded_file.seek(0)
     img = Image.open(uploaded_file)
     
-    # 1. Конвертуємо в RGBA для коректної роботи шарів
+    # 1. RGBA для шарів
     img = img.convert("RGBA")
 
-    # 2. Ресайз основного зображення
+    # 2. Ресайз (LANCZOS)
     if max_dim > 0 and (img.width > max_dim or img.height > max_dim):
         if img.width >= img.height:
             ratio = max_dim / float(img.width)
@@ -52,10 +52,9 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         else:
             ratio = max_dim / float(img.height)
             new_width, new_height = int(float(img.width) * ratio), max_dim
-        # Використовуємо LANCZOS (найкращий фільтр для чіткості)
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-    # 3. Накладання вотермарки
+    # 3. Вотермарка
     if wm_image:
         wm_rgba = wm_image.convert("RGBA")
         
@@ -63,20 +62,12 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         margin = wm_settings['margin']
         position = wm_settings['position']
         
-        # Розрахунок розміру
         new_wm_width = int(img.width * scale)
-        
-        # ЗАХИСТ ЯКОСТІ: Якщо вотермарка виходить занадто дрібною (менше 50px),
-        # вона перетвориться на кашу. Можна обмежити мінімальний розмір, 
-        # але краще просто використати якісний ресемплінг.
-        
         w_ratio = new_wm_width / float(wm_rgba.width)
         new_wm_height = int(float(wm_rgba.height) * w_ratio)
         
-        # Ресайз вотермарки з LANCZOS
         wm_resized = wm_rgba.resize((new_wm_width, new_wm_height), Image.Resampling.LANCZOS)
         
-        # Координати
         x, y = 0, 0
         if position == 'bottom-right': x, y = img.width - wm_resized.width - margin, img.height - wm_resized.height - margin
         elif position == 'bottom-left': x, y = margin, img.height - wm_resized.height - margin
@@ -84,11 +75,10 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         elif position == 'top-left': x, y = margin, margin
         elif position == 'center': x, y = (img.width - wm_resized.width) // 2, (img.height - wm_resized.height) // 2
         
-        # Накладання (використовуємо alpha_composite для кращого змішування пікселів)
-        # Але paste з маскою надійніше для різних форматів
+        # Накладання з маскою прозорості
         img.paste(wm_resized, (x, y), wm_resized)
 
-    # 4. Підготовка до збереження
+    # 4. Фон для JPEG
     if output_format == "JPEG":
         background = Image.new("RGB", img.size, (255, 255, 255))
         background.paste(img, mask=img.split()[3])
@@ -96,30 +86,14 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
     elif output_format == "RGB":
          img = img.convert("RGB")
 
-    # 5. Збереження з параметрами МАКСИМАЛЬНОЇ ЧІТКОСТІ
+    # 5. Збереження (HQ)
     output_buffer = io.BytesIO()
-    
     if output_format == "JPEG":
-        img.save(
-            output_buffer, 
-            format="JPEG", 
-            quality=quality, 
-            optimize=True, 
-            subsampling=0  # <--- ГОЛОВНИЙ ФІКС: Вимикає розмиття кольорів (Chroma Subsampling)
-        )
+        img.save(output_buffer, format="JPEG", quality=quality, optimize=True, subsampling=0)
     elif output_format == "WEBP":
-        img.save(
-            output_buffer, 
-            format="WEBP", 
-            quality=quality, 
-            method=6  # Максимально повільний, але якісний алгоритм стиснення
-        )
+        img.save(output_buffer, format="WEBP", quality=quality, method=6)
     elif output_format == "PNG":
-        img.save(
-            output_buffer, 
-            format="PNG", 
-            optimize=True
-        )
+        img.save(output_buffer, format="PNG", optimize=True)
 
     return output_buffer.getvalue(), img.size
 
@@ -129,9 +103,14 @@ col_head1, col_head2 = st.columns([3, 1], vertical_alignment="bottom")
 with col_head1:
     st.title("📸 Watermarker Pro MaAn")
 with col_head2:
+    # === ВИПРАВЛЕНО: ПОВЕРНУТО ВСІ ДАНІ ===
     with st.expander("ℹ️ About"):
         st.markdown("**Product:** Watermarker Pro MaAn")
+        st.markdown("**Author:** Marynyuk Andriy")
+        st.markdown("**License:** Proprietary")
+        st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
         st.caption("© 2025 All rights reserved")
+
 st.markdown("---")
 
 # НАЛАШТУВАННЯ
@@ -216,7 +195,8 @@ with col_left:
         if selected_filenames:
             preview_file_name = selected_filenames[-1]
         
-        c_act1, c_act2 = st.columns([1, 1])
+        # === ПАНЕЛЬ ДІЙ ===
+        c_act1, c_act2, c_act3 = st.columns([1, 1, 1.2])
         
         with c_act1:
             if selected_filenames:
@@ -228,7 +208,15 @@ with col_left:
                  st.button("🗑️ Видалити", disabled=True, use_container_width=True)
 
         with c_act2:
-            if st.button(f"🚀 Обробити всі ({len(files_list)})", type="primary", use_container_width=True):
+            if st.button("♻️ Очистити все", type="secondary", use_container_width=True):
+                st.session_state['file_cache'] = {}
+                st.session_state['res_list'] = []
+                st.session_state['res_zip'] = None
+                st.session_state['uploader_key'] += 1
+                st.rerun()
+
+        with c_act3:
+            if st.button(f"🚀 Обробити ({len(files_list)})", type="primary", use_container_width=True):
                 progress_bar = st.progress(0)
                 status = st.empty()
                 results = []
@@ -272,35 +260,23 @@ with col_left:
                 st.session_state['res_report'] = report
                 st.session_state['res_stats'] = {'orig': total_orig, 'new': total_new}
 
-    # === ВІДОБРАЖЕННЯ РЕЗУЛЬТАТІВ ===
+    # === РЕЗУЛЬТАТИ ===
     if 'res_list' in st.session_state and st.session_state['res_list']:
         st.divider()
         stats = st.session_state['res_stats']
         saved_mb = (stats['orig'] - stats['new']) / (1024*1024)
         
         st.success(f"Економія: **{saved_mb:.1f} MB**")
-        
-        # Кнопка архіву
         st.download_button("📦 Скачати ZIP", st.session_state['res_zip'], "photos.zip", "application/zip", type="primary", use_container_width=True)
         
-        # Таблиця звіту
         with st.expander("📊 Детальний звіт"):
             st.dataframe(pd.DataFrame(st.session_state['res_report']), use_container_width=True, column_config={"Економія": st.column_config.ProgressColumn(format="%f", min_value=0, max_value=100)})
 
-        # === ВИПРАВЛЕННЯ 2: ПОВЕРНУЛИ ОКРЕМЕ СКАЧУВАННЯ ===
         with st.expander("⬇️ Скачати окремо"):
             for idx, (fname, fbytes) in enumerate(st.session_state['res_list']):
                 col_dl1, col_dl2 = st.columns([4, 1])
-                with col_dl1:
-                    st.write(f"📄 {fname} ({len(fbytes)/1024:.1f} KB)")
-                with col_dl2:
-                    st.download_button(
-                        "⬇️", 
-                        data=fbytes, 
-                        file_name=fname, 
-                        mime=f"image/{out_fmt.lower()}",
-                        key=f"btn_dl_{idx}" # Унікальний ключ
-                    )
+                with col_dl1: st.write(f"📄 {fname} ({len(fbytes)/1024:.1f} KB)")
+                with col_dl2: st.download_button("⬇️", data=fbytes, file_name=fname, mime=f"image/{out_fmt.lower()}", key=f"btn_dl_{idx}")
 
 # === ПРАВА ЧАСТИНА: ПРЕВ'Ю ===
 with col_right:
