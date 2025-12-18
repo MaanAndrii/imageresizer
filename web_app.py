@@ -10,7 +10,7 @@ import re
 # Налаштування сторінки
 st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
 
-# --- Логіка (Допоміжні функції) ---
+# --- Логіка ---
 def get_safe_filename(original_filename, prefix="", extension="jpg"):
     name_only = original_filename.rsplit('.', 1)[0]
     timestamp = datetime.now().strftime('%H%M%S_%f')[:9]
@@ -23,13 +23,13 @@ def get_safe_filename(original_filename, prefix="", extension="jpg"):
         if not slug: slug = "image"
         return f"{slug}_{timestamp}.{extension}"
 
-def get_image_info(file_buffer):
-    """Отримує розміри зображення без повного завантаження в пам'ять (якщо можливо)"""
-    file_buffer.seek(0)
-    img = Image.open(file_buffer)
+def get_image_info(file_obj):
+    """Отримує розміри зображення"""
+    file_obj.seek(0)
+    img = Image.open(file_obj)
     width, height = img.size
-    size_bytes = file_buffer.getbuffer().nbytes
-    file_buffer.seek(0) # Повертаємо курсор на початок!
+    size_bytes = file_obj.getbuffer().nbytes
+    file_obj.seek(0)
     return width, height, size_bytes
 
 def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings, output_format):
@@ -43,7 +43,7 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
 
     original_size = uploaded_file.getbuffer().nbytes
     
-    # 1. Ресайз
+    # Ресайз
     if max_dim > 0 and (img.width > max_dim or img.height > max_dim):
         if img.width >= img.height:
             ratio = max_dim / float(img.width)
@@ -53,7 +53,7 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
             new_width, new_height = int(float(img.width) * ratio), max_dim
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-    # 2. Вотермарка
+    # Вотермарка
     if wm_image:
         scale = wm_settings['scale']
         margin = wm_settings['margin']
@@ -79,7 +79,7 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         else:
             img.paste(wm_resized, (x, y), wm_resized)
 
-    # 3. Збереження
+    # Збереження
     output_buffer = io.BytesIO()
     if output_format == "JPEG":
         img.save(output_buffer, format="JPEG", quality=quality, optimize=True)
@@ -93,9 +93,15 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         uploaded_file.seek(0)
         return uploaded_file.read()
         
-    return output_buffer.getvalue(), img.size # Повертаємо також нові розміри
+    return output_buffer.getvalue(), img.size
 
 # --- ІНТЕРФЕЙС ---
+
+# Ініціалізація сесії для файлів
+if 'all_files' not in st.session_state:
+    st.session_state['all_files'] = {} # словник {ім'я_файлу: об'єкт_файлу}
+if 'preview_target' not in st.session_state:
+    st.session_state['preview_target'] = None
 
 col_head1, col_head2 = st.columns([3, 1], vertical_alignment="bottom")
 with col_head1:
@@ -103,240 +109,202 @@ with col_head1:
 with col_head2:
     with st.expander("ℹ️ About"):
         st.markdown("**Product:** Watermarker Pro MaAn")
-        st.markdown("**Author:** Marynyuk Andriy")
-        st.markdown("**License:** Proprietary")
-        st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
         st.caption("© 2025 All rights reserved")
 
 st.markdown("---")
 
 # НАЛАШТУВАННЯ
-with st.expander("⚙️ **Налаштування обробки (Натисніть, щоб розгорнути)**", expanded=True):
+with st.expander("⚙️ **Налаштування**", expanded=True):
     set_col1, set_col2, set_col3 = st.columns(3)
-    
     with set_col1:
         st.subheader("1. Формат")
         out_fmt = st.selectbox("Вихідний формат", ["JPEG", "WEBP", "PNG"])
-        prefix = st.text_input("Префікс файлу", placeholder="напр. photo_edit")
-        
+        prefix = st.text_input("Префікс", placeholder="photo_edit")
     with set_col2:
         st.subheader("2. Розміри")
         resize_enabled = st.checkbox("Зменшувати розмір", value=True)
         max_dim = 0
         if resize_enabled:
             max_dim = st.select_slider("Макс. сторона (px)", options=[800, 1024, 1280, 1920, 3840], value=1920)
-        
         quality = 80
         if out_fmt != "PNG":
-            quality = st.slider("Якість стиснення", 50, 100, 80, 5)
-
+            quality = st.slider("Якість", 50, 100, 80, 5)
     with set_col3:
         st.subheader("3. Логотип")
-        wm_file_upload = st.file_uploader("Завантажити PNG", type=["png"])
-        
+        wm_file_upload = st.file_uploader("PNG Лого", type=["png"])
         wm_settings = {}
         if wm_file_upload:
             wm_settings['position'] = st.selectbox("Позиція", ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center'])
             wm_settings['scale'] = st.slider("Розмір (%)", 5, 50, 15) / 100
             wm_settings['margin'] = st.slider("Відступ (px)", 0, 100, 15)
 
-# ГОЛОВНА ЗОНА
 col_main, col_preview = st.columns([1.5, 1], gap="large")
 
-# === ЛІВА КОЛОНКА ===
+# === ЛІВА КОЛОНКА: КЕРУВАННЯ ФАЙЛАМИ ===
 with col_main:
-    st.header("📤 Завантаження")
+    st.header("📂 Файли")
     
-    uploaded_files = st.file_uploader(
-        "Перетягніть фото сюди (підтримується мультизавантаження)", 
+    # 1. Завантажувач (Додає файли до існуючих)
+    new_uploaded_files = st.file_uploader(
+        "Додати файли", 
         type=['png', 'jpg', 'jpeg', 'bmp', 'webp'], 
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        label_visibility="collapsed"
     )
 
-    if uploaded_files:
-        # --- НОВЕ: ТАБЛИЦЯ ВХІДНИХ ФАЙЛІВ ---
-        st.caption(f"Вибрано файлів: {len(uploaded_files)}")
-        
-        # Збираємо дані для таблиці
-        input_data = []
-        for f in uploaded_files:
+    # Додаємо нові файли в сесію
+    if new_uploaded_files:
+        for f in new_uploaded_files:
+            if f.name not in st.session_state['all_files']:
+                st.session_state['all_files'][f.name] = f
+        # Очищаємо завантажувач (хак для Streamlit, щоб не дублювати додавання)
+        # st.rerun() # Можна розкоментувати, якщо будуть проблеми з дублями
+
+    # Якщо файли є в пам'яті
+    current_files = list(st.session_state['all_files'].values())
+    
+    if current_files:
+        # Формуємо дані для редактора
+        editor_data = []
+        for f in current_files:
             w, h, size = get_image_info(f)
-            input_data.append({
+            # Визначаємо, чи цей файл зараз вибраний для прев'ю
+            is_preview = (f.name == st.session_state['preview_target'])
+            
+            editor_data.append({
+                "Прев'ю": is_preview,
                 "Файл": f.name,
-                "Розмір (KB)": f"{size/1024:.1f}",
-                "Пікселі": f"{w} x {h}"
+                "Розмір": f"{size/1024:.1f} KB",
+                "Інфо": f"{w}x{h}",
+                "Видалити": False # Чекбокс для видалення
             })
         
-        # Відображаємо гарну таблицю
-        df_input = pd.DataFrame(input_data)
-        st.dataframe(df_input, use_container_width=True, hide_index=True)
-        # -------------------------------------
+        df_editor = pd.DataFrame(editor_data)
+
+        # 2. ІНТЕРАКТИВНА ТАБЛИЦЯ
+        st.caption("Виберіть файл у колонці **Прев'ю** для перегляду справа. Позначте **Видалити**, щоб прибрати файл.")
         
-        if st.button(f"🚀 Обробити ({len(uploaded_files)} шт.)", type="primary", use_container_width=True):
-            
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            temp_results = [] # Для скачування
-            report_data = []  # Для таблиці звіту
-            total_orig_size = 0
-            total_new_size = 0
-            
-            wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
-            zip_buffer = io.BytesIO()
+        edited_df = st.data_editor(
+            df_editor,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "Прев'ю": st.column_config.CheckboxColumn("👁️", help="Показати прев'ю", default=False),
+                "Видалити": st.column_config.CheckboxColumn("🗑️", help="Видалити файл", default=False),
+                "Файл": st.column_config.TextColumn("Назва файлу", disabled=True),
+                "Розмір": st.column_config.TextColumn("Вага", disabled=True),
+                "Інфо": st.column_config.TextColumn("px", disabled=True),
+            },
+            key="file_editor"
+        )
 
-            with zipfile.ZipFile(zip_buffer, "w") as zf:
-                total_files = len(uploaded_files)
-                for i, file in enumerate(uploaded_files):
-                    status_text.text(f"Обробка: {file.name}...")
-                    
-                    # Отримуємо старі розміри ще раз для точності звіту
-                    orig_w, orig_h, orig_bytes_len = get_image_info(file)
-                    total_orig_size += orig_bytes_len
-                    
-                    try:
-                        processed_bytes, (new_w, new_h) = process_single_image(
-                            file, wm_obj, max_dim, quality, 
-                            wm_settings if wm_obj else None, out_fmt
-                        )
-                        new_bytes_len = len(processed_bytes)
-                        total_new_size += new_bytes_len
-                        
-                        ext = out_fmt.lower()
-                        new_name = get_safe_filename(file.name, prefix, ext)
-                        
-                        zf.writestr(new_name, processed_bytes)
-                        
-                        # Дані для скачування
-                        temp_results.append((new_name, processed_bytes))
-                        
-                        # Дані для звіту (таблиця)
-                        savings = ((orig_bytes_len - new_bytes_len) / orig_bytes_len) * 100
-                        report_data.append({
-                            "Файл": new_name,
-                            "Було (KB)": f"{orig_bytes_len/1024:.1f}",
-                            "Стало (KB)": f"{new_bytes_len/1024:.1f}",
-                            "Економія": f"{savings:.1f}%",
-                            "Новий розмір": f"{new_w} x {new_h}"
-                        })
-                        
-                    except Exception as e:
-                        st.error(f"Помилка: {e}")
-                    progress_bar.progress((i + 1) / total_files)
-            
-            progress_bar.progress(100)
-            status_text.success("Готово!")
-            
-            # Збереження в сесію
-            st.session_state['processed_data'] = temp_results
-            st.session_state['report_data'] = report_data # Зберігаємо таблицю
-            st.session_state['zip_bytes'] = zip_buffer.getvalue()
-            st.session_state['stats'] = {
-                'orig': total_orig_size,
-                'new': total_new_size
-            }
+        # 3. ЛОГІКА ОБРОБКИ ЗМІН В ТАБЛИЦІ
+        # Перевіряємо видалення
+        files_to_delete = edited_df[edited_df["Видалити"] == True]["Файл"].tolist()
+        if files_to_delete:
+            for fname in files_to_delete:
+                del st.session_state['all_files'][fname]
+                # Якщо видалили той, що на прев'ю - скидаємо прев'ю
+                if st.session_state['preview_target'] == fname:
+                    st.session_state['preview_target'] = None
+            st.rerun()
 
-        # Блок відображення результатів
-        if 'processed_data' in st.session_state and st.session_state['processed_data']:
-            st.divider()
-            st.subheader("🏁 Результати")
-            
-            # Статистика
-            stats = st.session_state['stats']
-            saved_size = stats['orig'] - stats['new']
-            saved_mb = saved_size / (1024 * 1024)
-            saved_percent = (saved_size / stats['orig']) * 100 if stats['orig'] > 0 else 0
-            
-            col_res_info, col_res_dl = st.columns([2, 1])
-            with col_res_info:
-                st.info(f"Загальна економія: **{saved_mb:.1f} MB ({saved_percent:.0f}%)**")
-            with col_res_dl:
-                st.download_button(
-                    label="📦 Завантажити ZIP",
-                    data=st.session_state['zip_bytes'],
-                    file_name=f"processed_{datetime.now().strftime('%H%M')}.zip",
-                    mime="application/zip",
-                    type="primary",
-                    use_container_width=True
-                )
-            
-            # --- НОВЕ: ТАБЛИЦЯ РЕЗУЛЬТАТІВ ---
-            with st.expander("📊 Детальний звіт (Таблиця)", expanded=True):
-                df_report = pd.DataFrame(st.session_state['report_data'])
-                st.dataframe(
-                    df_report, 
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Економія": st.column_config.ProgressColumn(
-                            "Економія",
-                            format="%f",
-                            min_value=0,
-                            max_value=100,
-                        )
-                    }
-                )
-            # ----------------------------------
+        # Перевіряємо вибір прев'ю (дозволяємо тільки один вибір)
+        preview_selected = edited_df[edited_df["Прев'ю"] == True]["Файл"].tolist()
+        if preview_selected:
+            # Беремо останній клікнутий (або перший у списку)
+            new_target = preview_selected[-1]
+            if new_target != st.session_state['preview_target']:
+                st.session_state['preview_target'] = new_target
+                st.rerun()
+        
+        # Кнопка запуску (тільки для актуальних файлів)
+        actual_files = list(st.session_state['all_files'].values())
+        if actual_files:
+            if st.button(f"🚀 Обробити ({len(actual_files)} шт.)", type="primary", use_container_width=True):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                temp_results = []
+                report_data = []
+                total_orig = 0
+                total_new = 0
+                
+                wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
+                zip_buffer = io.BytesIO()
 
-            # Окремі файли (Список з кнопками)
-            with st.expander("⬇️ Скачати окремо"):
-                for idx, (p_name, p_bytes) in enumerate(st.session_state['processed_data']):
-                    c1, c2, c3 = st.columns([1, 4, 2], vertical_alignment="center")
-                    with c1: st.image(p_bytes, width=40)
-                    with c2: st.caption(p_name)
-                    with c3:
-                        st.download_button(
-                            "⬇️",
-                            data=p_bytes,
-                            file_name=p_name,
-                            mime=f"image/{out_fmt.lower()}",
-                            key=f"dl_{idx}_{p_name}"
-                        )
+                with zipfile.ZipFile(zip_buffer, "w") as zf:
+                    total = len(actual_files)
+                    for i, file in enumerate(actual_files):
+                        status_text.text(f"Обробка: {file.name}...")
+                        w, h, orig_b = get_image_info(file)
+                        total_orig += orig_b
+                        
+                        try:
+                            p_bytes, (nw, nh) = process_single_image(
+                                file, wm_obj, max_dim, quality, wm_settings if wm_obj else None, out_fmt
+                            )
+                            new_b = len(p_bytes)
+                            total_new += new_b
+                            
+                            ext = out_fmt.lower()
+                            new_name = get_safe_filename(file.name, prefix, ext)
+                            zf.writestr(new_name, p_bytes)
+                            
+                            temp_results.append((new_name, p_bytes))
+                            report_data.append({
+                                "Файл": new_name,
+                                "Економія": ((orig_b - new_b)/orig_b)*100,
+                                "Розмір": f"{nw}x{nh}"
+                            })
+                        except Exception as e: st.error(f"Err: {e}")
+                        progress_bar.progress((i+1)/total)
+                
+                progress_bar.progress(100)
+                status_text.success("Готово!")
+                
+                st.session_state['processed'] = temp_results
+                st.session_state['report'] = report_data
+                st.session_state['zip'] = zip_buffer.getvalue()
+                st.session_state['stats'] = {'orig': total_orig, 'new': total_new}
 
-# === ПРАВА КОЛОНКА ===
+    # Відображення результатів
+    if 'processed' in st.session_state and st.session_state['processed']:
+        st.divider()
+        stats = st.session_state['stats']
+        saved = stats['orig'] - stats['new']
+        st.info(f"Загальна економія: **{saved/(1024*1024):.1f} MB**")
+        
+        st.download_button("📦 Завантажити ZIP", st.session_state['zip'], f"photos.zip", "application/zip", type="primary", use_container_width=True)
+        
+        with st.expander("📊 Звіт"):
+            st.dataframe(pd.DataFrame(st.session_state['report']), use_container_width=True, column_config={"Економія": st.column_config.ProgressColumn(format="%f", min_value=0, max_value=100)})
+
+# === ПРАВА КОЛОНКА: ПРЕВ'Ю ===
 with col_preview:
-    st.header("📊 Тест")
+    st.header("👁️ Прев'ю")
+    target_name = st.session_state.get('preview_target')
     
+    # Шукаємо файл об'єкт по імені
+    target_file = st.session_state['all_files'].get(target_name) if target_name else None
+
     with st.container(border=True):
-        if uploaded_files:
-            file_names = [f.name for f in uploaded_files]
-            selected_file_name = st.selectbox("Виберіть файл:", file_names)
-            
-            sample_file = next(f for f in uploaded_files if f.name == selected_file_name)
-            
-            # Отримуємо інфо
-            orig_w, orig_h, orig_size = get_image_info(sample_file)
-            
-            wm_obj_sample = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
+        if target_file:
+            # Логіка генерації прев'ю
+            orig_w, orig_h, orig_s = get_image_info(target_file)
+            wm_obj_s = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
             
             try:
                 with st.spinner("Генерація..."):
-                    # Зверніть увагу, функція тепер повертає два значення
-                    result_bytes, (new_w, new_h) = process_single_image(
-                        sample_file, wm_obj_sample, max_dim, quality, 
-                        wm_settings if wm_obj_sample else None, out_fmt
+                    res_bytes, (nw, nh) = process_single_image(
+                        target_file, wm_obj_s, max_dim, quality, wm_settings if wm_obj_s else None, out_fmt
                     )
+                st.image(res_bytes, caption=f"{target_name} ({nw}x{nh})", use_container_width=True)
                 
-                new_size = len(result_bytes)
-                
-                st.image(result_bytes, caption=f"Результат", use_container_width=True)
-                
-                st.divider()
-                st.write(f"**Оригінал:** {orig_w}x{orig_h} ({orig_size/1024:.1f} KB)")
-                st.write(f"**Результат:** {new_w}x{new_h} ({new_size/1024:.1f} KB)")
-                
-                delta = ((new_size - orig_size) / orig_size) * 100
+                delta = ((len(res_bytes) - orig_s) / orig_s) * 100
                 st.metric("Ефективність", f"{delta:.1f}%", delta_color="inverse")
-
+                
             except Exception as e:
-                st.error(f"Помилка прев'ю: {e}")
+                st.error(f"Помилка: {e}")
         else:
-            st.info("Додайте фото для тесту.")
-            st.markdown(
-                """
-                <div style="height: 200px; background-color: #f0f2f6; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #888;">
-                    📸
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
+            st.info("Поставте галочку 👁️ навпроти файлу зліва.")
+            st.markdown('<div style="height:200px;background:#f0f2f6;"></div>', unsafe_allow_html=True)
