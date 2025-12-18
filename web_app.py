@@ -41,10 +41,10 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
     uploaded_file.seek(0)
     img = Image.open(uploaded_file)
     
-    # === ВИПРАВЛЕННЯ 1: Завжди конвертуємо в RGBA для коректної роботи шарів ===
+    # 1. Конвертуємо в RGBA для коректної роботи шарів
     img = img.convert("RGBA")
 
-    # Ресайз
+    # 2. Ресайз основного зображення
     if max_dim > 0 and (img.width > max_dim or img.height > max_dim):
         if img.width >= img.height:
             ratio = max_dim / float(img.width)
@@ -52,23 +52,31 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         else:
             ratio = max_dim / float(img.height)
             new_width, new_height = int(float(img.width) * ratio), max_dim
+        # Використовуємо LANCZOS (найкращий фільтр для чіткості)
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-    # Вотермарка
+    # 3. Накладання вотермарки
     if wm_image:
-        # Переконуємось, що вотермарка теж RGBA
         wm_rgba = wm_image.convert("RGBA")
         
         scale = wm_settings['scale']
         margin = wm_settings['margin']
         position = wm_settings['position']
         
+        # Розрахунок розміру
         new_wm_width = int(img.width * scale)
+        
+        # ЗАХИСТ ЯКОСТІ: Якщо вотермарка виходить занадто дрібною (менше 50px),
+        # вона перетвориться на кашу. Можна обмежити мінімальний розмір, 
+        # але краще просто використати якісний ресемплінг.
+        
         w_ratio = new_wm_width / float(wm_rgba.width)
         new_wm_height = int(float(wm_rgba.height) * w_ratio)
         
+        # Ресайз вотермарки з LANCZOS
         wm_resized = wm_rgba.resize((new_wm_width, new_wm_height), Image.Resampling.LANCZOS)
         
+        # Координати
         x, y = 0, 0
         if position == 'bottom-right': x, y = img.width - wm_resized.width - margin, img.height - wm_resized.height - margin
         elif position == 'bottom-left': x, y = margin, img.height - wm_resized.height - margin
@@ -76,27 +84,42 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         elif position == 'top-left': x, y = margin, margin
         elif position == 'center': x, y = (img.width - wm_resized.width) // 2, (img.height - wm_resized.height) // 2
         
-        # === ВАЖЛИВО: Третій аргумент (wm_resized) діє як маска прозорості ===
+        # Накладання (використовуємо alpha_composite для кращого змішування пікселів)
+        # Але paste з маскою надійніше для різних форматів
         img.paste(wm_resized, (x, y), wm_resized)
 
-    # Фінальна конвертація залежно від формату
+    # 4. Підготовка до збереження
     if output_format == "JPEG":
-        # JPEG не підтримує прозорість, конвертуємо в RGB (прозоре стане білим або чорним)
-        # Щоб прозоре стало білим, можна створити білий фон:
         background = Image.new("RGB", img.size, (255, 255, 255))
-        background.paste(img, mask=img.split()[3]) # 3 - це альфа канал
+        background.paste(img, mask=img.split()[3])
         img = background
     elif output_format == "RGB":
          img = img.convert("RGB")
-    # Для PNG та WEBP залишаємо RGBA (або конвертуємо якщо треба)
 
+    # 5. Збереження з параметрами МАКСИМАЛЬНОЇ ЧІТКОСТІ
     output_buffer = io.BytesIO()
+    
     if output_format == "JPEG":
-        img.save(output_buffer, format="JPEG", quality=quality, optimize=True)
+        img.save(
+            output_buffer, 
+            format="JPEG", 
+            quality=quality, 
+            optimize=True, 
+            subsampling=0  # <--- ГОЛОВНИЙ ФІКС: Вимикає розмиття кольорів (Chroma Subsampling)
+        )
     elif output_format == "WEBP":
-        img.save(output_buffer, format="WEBP", quality=quality, method=6)
+        img.save(
+            output_buffer, 
+            format="WEBP", 
+            quality=quality, 
+            method=6  # Максимально повільний, але якісний алгоритм стиснення
+        )
     elif output_format == "PNG":
-        img.save(output_buffer, format="PNG", optimize=True)
+        img.save(
+            output_buffer, 
+            format="PNG", 
+            optimize=True
+        )
 
     return output_buffer.getvalue(), img.size
 
