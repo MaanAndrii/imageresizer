@@ -6,8 +6,8 @@ import zipfile
 from datetime import datetime
 import re
 
-# Налаштування сторінки
-st.set_page_config(page_title="Watermarker Pro", page_icon="📸", layout="wide")
+# --- 1. ЗМІНА НАЗВИ У ВКЛАДЦІ БРАУЗЕРА ---
+st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
 
 # --- Логіка (Без змін) ---
 def get_safe_filename(original_filename, prefix="", extension="jpg"):
@@ -33,7 +33,6 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
 
     original_size = uploaded_file.getbuffer().nbytes
     
-    # 1. Ресайз
     if max_dim > 0 and (img.width > max_dim or img.height > max_dim):
         if img.width >= img.height:
             ratio = max_dim / float(img.width)
@@ -43,7 +42,6 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
             new_width, new_height = int(float(img.width) * ratio), max_dim
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-    # 2. Вотермарка
     if wm_image:
         scale = wm_settings['scale']
         margin = wm_settings['margin']
@@ -69,7 +67,6 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
         else:
             img.paste(wm_resized, (x, y), wm_resized)
 
-    # 3. Збереження
     output_buffer = io.BytesIO()
     if output_format == "JPEG":
         img.save(output_buffer, format="JPEG", quality=quality, optimize=True)
@@ -87,7 +84,8 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
 
 # --- ІНТЕРФЕЙС ---
 
-st.title("📸 Watermarker Pro")
+# --- 2. ЗМІНА ГОЛОВНОГО ЗАГОЛОВКА ---
+st.title("📸 Watermarker Pro MaAn")
 st.markdown("---")
 
 col_settings, col_upload, col_preview = st.columns([1, 1.5, 1], gap="medium")
@@ -125,11 +123,14 @@ with col_settings:
             wm_settings['margin'] = st.slider("Відступ (px)", 0, 100, 15)
 
     st.markdown("---")
-    st.caption("ℹ️ Про програму")
-    st.markdown("**Author:** Marynyuk Andriy")
-    st.markdown("**License:** GNU GPLv3")
-    st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
-    st.markdown("© 2025 All rights reserved")
+    
+    # --- 3. ПРИХОВАНИЙ БЛОК "ABOUT" ---
+    with st.expander("ℹ️ About"):
+        st.markdown("**Product:** Watermarker Pro MaAn")
+        st.markdown("**Author:** Marynyuk Andriy")
+        st.markdown("**License:** GNU GPLv3")
+        st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
+        st.caption("© 2025 All rights reserved")
 
 # ==========================
 # 2. ЦЕНТРАЛЬНИЙ СТОВПЕЦЬ
@@ -146,20 +147,16 @@ with col_upload:
     if uploaded_files:
         st.success(f"Вибрано файлів: {len(uploaded_files)}")
         
-        # Кнопка запускає процес, результати зберігаємо в session_state
         if st.button(f"🚀 Обробити та Скачати", type="primary", use_container_width=True):
             
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            # Тимчасові змінні
             temp_results = []
             total_orig_size = 0
             total_new_size = 0
             
             wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
-            
-            # Створюємо ZIP у пам'яті
             zip_buffer = io.BytesIO()
 
             with zipfile.ZipFile(zip_buffer, "w") as zf:
@@ -188,17 +185,13 @@ with col_upload:
             progress_bar.progress(100)
             status_text.success("Готово!")
             
-            # === ЗБЕРІГАЄМО РЕЗУЛЬТАТИ В session_state ===
             st.session_state['processed_data'] = temp_results
             st.session_state['zip_bytes'] = zip_buffer.getvalue()
             st.session_state['stats'] = {
                 'orig': total_orig_size,
                 'new': total_new_size
             }
-            # ============================================
 
-        # === ВІДОБРАЖЕННЯ РЕЗУЛЬТАТІВ (З ПАМ'ЯТІ) ===
-        # Цей блок виконується завжди, якщо в пам'яті є дані
         if 'processed_data' in st.session_state and st.session_state['processed_data']:
             
             stats = st.session_state['stats']
@@ -247,7 +240,6 @@ with col_preview:
     
     if uploaded_files:
         file_names = [f.name for f in uploaded_files]
-        # Запам'ятовуємо вибір користувача в selectbox також
         selected_file_name = st.selectbox("Файл для огляду:", file_names)
         
         sample_file = next(f for f in uploaded_files if f.name == selected_file_name)
