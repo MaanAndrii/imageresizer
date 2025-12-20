@@ -7,12 +7,13 @@ from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 from translitua import translit
 
 """
-Watermarker Pro Engine v4.8
+Watermarker Pro Engine v4.8 (FULL)
 ---------------------------
-New Features:
+Features:
 - Text Watermark generation
 - EXIF metadata preservation
-- Improved validation
+- Advanced diagonal tiling
+- Validation & Error handling
 """
 
 # === CONFIG ===
@@ -52,6 +53,7 @@ def generate_filename(original_name: str, naming_mode: str, prefix: str = "", ex
 
 
 def get_image_metadata(file_bytes: bytes) -> tuple:
+    """Отримує метадані зображення з валідацією."""
     try:
         with Image.open(io.BytesIO(file_bytes)) as img:
             if img.width == 0 or img.height == 0:
@@ -63,13 +65,11 @@ def get_image_metadata(file_bytes: bytes) -> tuple:
 
 def create_text_watermark(text: str, font_size: int = 50, color_hex: str = "#FFFFFF", opacity: float = 1.0) -> Image.Image:
     """Генерує зображення з тексту для використання як вотермарки."""
-    # Створюємо тимчасовий канвас для розрахунку розміру тексту
     dummy_img = Image.new('RGBA', (10, 10), (0, 0, 0, 0))
     draw = ImageDraw.Draw(dummy_img)
     
-    # Спроба завантажити шрифт (Linux/Windows сумісність)
     try:
-        # Спробуємо стандартні шрифти, якщо ні - дефолтний
+        # Спроба завантажити системні шрифти
         try:
             font = ImageFont.truetype("arial.ttf", font_size)
         except IOError:
@@ -77,27 +77,22 @@ def create_text_watermark(text: str, font_size: int = 50, color_hex: str = "#FFF
                 font = ImageFont.truetype("DejaVuSans.ttf", font_size) # Linux/Streamlit Cloud
             except IOError:
                 font = ImageFont.load_default()
-                # Дефолтний шрифт не масштабується, тому це fallback
     except Exception:
         font = ImageFont.load_default()
 
-    # Розрахунок розмірів тексту
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
     
-    # Створюємо фінальне зображення (+ padding щоб не обрізало краї)
+    # +20px padding
     wm = Image.new('RGBA', (text_w + 20, text_h + 20), (0, 0, 0, 0))
     draw = ImageDraw.Draw(wm)
     
-    # Конвертуємо HEX колір в RGB
     color_hex = color_hex.lstrip('#')
     rgb = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
     
-    # Малюємо текст
     draw.text((10, 10), text, font=font, fill=rgb + (255,))
     
-    # Застосовуємо прозорість
     if opacity < 1.0:
         alpha = wm.split()[3]
         alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
@@ -108,16 +103,14 @@ def create_text_watermark(text: str, font_size: int = 50, color_hex: str = "#FFF
 
 def load_and_process_watermark(wm_source, opacity: float, is_text: bool = False, text_params: dict = None) -> Image.Image:
     """Універсальний завантажувач вотермарки (Файл або Текст)."""
-    
     if is_text and text_params:
         return create_text_watermark(
-            text_params['text'], 
+            text_params.get('text', 'Copyright'), 
             text_params.get('size', 50),
             text_params.get('color', '#FFFFFF'),
             opacity
         )
     
-    # Якщо це файл (bytes)
     if not wm_source:
         return None
     
@@ -137,17 +130,15 @@ def load_and_process_watermark(wm_source, opacity: float, is_text: bool = False,
 
 
 def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int, keep_exif: bool = False) -> tuple:
-    """Основна функція обробки з підтримкою EXIF."""
+    """Основна функція обробки."""
     input_io = io.BytesIO(file_bytes)
     img = Image.open(input_io)
     
-    # Зберігаємо EXIF якщо треба
+    # EXIF Logic
     exif_data = img.info.get('exif') if keep_exif else None
     
     orig_w, orig_h = img.size
     orig_format = img.format
-    
-    # Конвертуємо для обробки, але пам'ятаємо режим
     img = img.convert("RGBA")
     
     # --- RESIZE LOGIC ---
@@ -182,8 +173,7 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
         position = resize_config.get('wm_position', DEFAULT_CONFIG['wm_position'])
         angle = resize_config.get('wm_angle', DEFAULT_CONFIG['wm_angle'])
         
-        # Ресайз вотермарки
-        if scale > 0.9: scale = 0.9 # Hard limit
+        if scale > 0.9: scale = 0.9
         
         wm_w_target = int(new_w * scale)
         if wm_w_target < 1: wm_w_target = 1
@@ -199,7 +189,6 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
 
         wm_w_final, wm_h_final = wm_resized.size
 
-        # Накладання
         if position == 'tiled':
             gap = resize_config.get('wm_gap', DEFAULT_CONFIG['wm_gap'])
             overlay = Image.new('RGBA', (new_w, new_h), (0, 0, 0, 0))
@@ -218,26 +207,18 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
                     y = row * step_y
                     if x + wm_w_final > 0 and x < new_w and y + wm_h_final > 0 and y < new_h:
                         overlay.paste(wm_resized, (x, y), wm_resized)
-            
             img = Image.alpha_composite(img, overlay)
         else:
             margin = resize_config.get('wm_margin', DEFAULT_CONFIG['wm_margin'])
             pos_x, pos_y = 0, 0
-            
-            if position == 'bottom-right': 
-                pos_x, pos_y = new_w - wm_w_final - margin, new_h - wm_h_final - margin
-            elif position == 'bottom-left': 
-                pos_x, pos_y = margin, new_h - wm_h_final - margin
-            elif position == 'top-right': 
-                pos_x, pos_y = new_w - wm_w_final - margin, margin
-            elif position == 'top-left': 
-                pos_x, pos_y = margin, margin
-            elif position == 'center': 
-                pos_x, pos_y = (new_w - wm_w_final) // 2, (new_h - wm_h_final) // 2
+            if position == 'bottom-right': pos_x, pos_y = new_w - wm_w_final - margin, new_h - wm_h_final - margin
+            elif position == 'bottom-left': pos_x, pos_y = margin, new_h - wm_h_final - margin
+            elif position == 'top-right': pos_x, pos_y = new_w - wm_w_final - margin, margin
+            elif position == 'top-left': pos_x, pos_y = margin, margin
+            elif position == 'center': pos_x, pos_y = (new_w - wm_w_final) // 2, (new_h - wm_h_final) // 2
             
             pos_x = max(0, min(pos_x, new_w - wm_w_final))
             pos_y = max(0, min(pos_y, new_h - wm_h_final))
-            
             img.paste(wm_resized, (pos_x, pos_y), wm_resized)
 
     # --- EXPORT ---
@@ -249,7 +230,6 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
          img = img.convert("RGB")
 
     output_buffer = io.BytesIO()
-    
     save_kwargs = {}
     if keep_exif and exif_data:
         save_kwargs['exif'] = exif_data
