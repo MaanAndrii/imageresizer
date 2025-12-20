@@ -1,314 +1,251 @@
 import streamlit as st
 import pandas as pd
-from PIL import Image
-from translitua import translit
 import io
 import zipfile
+import concurrent.futures
 from datetime import datetime
-import re
 
-# Налаштування сторінки
+# Імпорт нашого нового модуля
+import watermarker_engine as engine
+
+# --- КОНФІГУРАЦІЯ ---
 st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
 
-# === Ініціалізація Session State ===
-if 'file_cache' not in st.session_state:
-    st.session_state['file_cache'] = {}
-if 'uploader_key' not in st.session_state:
-    st.session_state['uploader_key'] = 0
+# ==========================================
+# 🌐 ЛОКАЛІЗАЦІЯ (Без змін)
+# ==========================================
+TRANSLATIONS = {
+    "ua": {
+        "title": "📸 Watermarker Pro v4.0 (Modular)",
+        "lang_select": "Мова / Language",
+        "sb_config": "🛠 Налаштування",
+        "sec_file": "1. Файл та Ім'я",
+        "sec_geo": "2. Геометрія (Ресайз)",
+        "sec_wm": "3. Вотермарка",
+        "lbl_format": "Формат", "lbl_quality": "Якість", "lbl_naming": "Стратегія імен", "lbl_prefix": "Префікс",
+        "chk_resize": "Змінювати розмір", "lbl_resize_mode": "Режим", "lbl_resize_val": "Розмір (px)", "lbl_presets": "Швидкі пресети:",
+        "lbl_wm_upload": "Завантажити лого (PNG)", "lbl_wm_pos": "Позиція", "lbl_wm_scale": "Масштаб (%)", "lbl_wm_opacity": "Прозорість", "lbl_wm_margin": "Відступ (px)",
+        "files_header": "📂 Робоча область", "uploader_label": "Файли", "tbl_select": "✅", "tbl_name": "Файл",
+        "btn_delete": "🗑️ Видалити", "btn_reset": "♻️ Скинути", "btn_process": "🚀 Обробити", "msg_done": "Готово!",
+        "res_savings": "Економія", "btn_dl_zip": "📦 Скачати ZIP", "exp_report": "📊 Технічний звіт", "exp_dl_separate": "⬇️ Скачати окремо",
+        "prev_header": "👁️ Живий перегляд", "prev_rendering": "Генерація...", "prev_size": "Розмір", "prev_weight": "Вага", "prev_info": "Оберіть файл (✅) для тесту.",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.0", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
+    },
+    "en": {
+        "title": "📸 Watermarker Pro v4.0 (Modular)",
+        "lang_select": "Language / Мова",
+        "sb_config": "🛠 Configuration",
+        "sec_file": "1. File & Naming",
+        "sec_geo": "2. Geometry (Resize)",
+        "sec_wm": "3. Watermark",
+        "lbl_format": "Output Format", "lbl_quality": "Quality", "lbl_naming": "Naming Strategy", "lbl_prefix": "Filename Prefix",
+        "chk_resize": "Enable Resize", "lbl_resize_mode": "Mode", "lbl_resize_val": "Size (px)", "lbl_presets": "Quick Presets:",
+        "lbl_wm_upload": "Upload Logo (PNG)", "lbl_wm_pos": "Position", "lbl_wm_scale": "Scale (%)", "lbl_wm_opacity": "Opacity", "lbl_wm_margin": "Margin (px)",
+        "files_header": "📂 Workspace", "uploader_label": "Files", "tbl_select": "✅", "tbl_name": "File",
+        "btn_delete": "🗑️ Delete", "btn_reset": "♻️ Reset", "btn_process": "🚀 Process", "msg_done": "Done!",
+        "res_savings": "Savings", "btn_dl_zip": "📦 Download ZIP", "exp_report": "📊 Technical Report", "exp_dl_separate": "⬇️ Download Separate",
+        "prev_header": "👁️ Live Preview", "prev_rendering": "Rendering...", "prev_size": "Dimensions", "prev_weight": "Weight", "prev_info": "Select a file (✅) to preview.",
+        "about_prod": "**Product:** Watermarker Pro MaAn v4.0", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
+    }
+}
 
-# --- Логіка ---
-def get_safe_filename(original_filename, prefix="", extension="jpg"):
-    name_only = original_filename.rsplit('.', 1)[0]
-    timestamp = datetime.now().strftime('%H%M%S_%f')[:9]
-    if prefix:
-        clean_prefix = re.sub(r'[\s\W_]+', '-', translit(prefix).lower()).strip('-')
-        return f"{clean_prefix}_{timestamp}.{extension}"
-    else:
-        slug = translit(name_only).lower()
-        slug = re.sub(r'[\s\W_]+', '-', slug).strip('-')
-        if not slug: slug = "image"
-        return f"{slug}_{timestamp}.{extension}"
+OPTIONS_MAP = {
+    "ua": {
+        "Keep Original": "Зберегти назву", "Prefix + Sequence": "Префікс + Номер (001)", "Timestamp": "Таймстемп", "Original + Suffix": "Оригінал + Суфікс", "Content Hash": "Хеш контенту",
+        "Max Side": "Макс. сторона", "Exact Width": "Точна ширина", "Exact Height": "Точна висота",
+        "bottom-right": "Знизу-праворуч", "bottom-left": "Знизу-ліворуч", "top-right": "Зверху-праворуч", "top-left": "Зверху-ліворуч", "center": "Центр"
+    },
+    "en": {
+        "Keep Original": "Keep Original", "Prefix + Sequence": "Prefix + Sequence (001)", "Timestamp": "Timestamp", "Original + Suffix": "Original + Suffix", "Content Hash": "Content Hash",
+        "Max Side": "Max Side", "Exact Width": "Exact Width", "Exact Height": "Exact Height",
+        "bottom-right": "Bottom-Right", "bottom-left": "Bottom-Left", "top-right": "Top-Right", "top-left": "Top-Left", "center": "Center"
+    }
+}
 
-def get_image_info(file_obj):
-    file_obj.seek(0)
-    img = Image.open(file_obj)
-    width, height = img.size
-    size_bytes = file_obj.getbuffer().nbytes
-    file_obj.seek(0)
-    return width, height, size_bytes
+# ==========================================
+# 🔌 PROXY FUNCTIONS (UI-Layer Caching)
+# ==========================================
+# Тут ми "обгортаємо" чистий backend у кеш Streamlit
 
-def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings, output_format):
-    uploaded_file.seek(0)
-    img = Image.open(uploaded_file)
+@st.cache_data(show_spinner=False)
+def ui_get_metadata(file_bytes):
+    return engine.get_image_metadata(file_bytes)
+
+@st.cache_resource(show_spinner=False)
+def ui_load_watermark(wm_bytes, opacity):
+    return engine.load_and_process_watermark(wm_bytes, opacity)
+
+# ==========================================
+# 🖥️ UI IMPLEMENTATION
+# ==========================================
+
+# Init State
+if 'file_cache' not in st.session_state: st.session_state['file_cache'] = {}
+if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
+if 'resize_val_state' not in st.session_state: st.session_state['resize_val_state'] = 1920
+
+# Sidebar
+with st.sidebar:
+    lang_choice = st.selectbox("Language / Мова", ["Українська", "English"])
+    lang_code = "ua" if lang_choice == "Українська" else "en"
+    T = TRANSLATIONS[lang_code]
     
-    # 1. RGBA для шарів
-    img = img.convert("RGBA")
-
-    # 2. Ресайз (LANCZOS)
-    if max_dim > 0 and (img.width > max_dim or img.height > max_dim):
-        if img.width >= img.height:
-            ratio = max_dim / float(img.width)
-            new_width, new_height = max_dim, int(float(img.height) * ratio)
-        else:
-            ratio = max_dim / float(img.height)
-            new_width, new_height = int(float(img.width) * ratio), max_dim
-        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-    # 3. Вотермарка
-    if wm_image:
-        wm_rgba = wm_image.convert("RGBA")
-        
-        scale = wm_settings['scale']
-        margin = wm_settings['margin']
-        position = wm_settings['position']
-        
-        new_wm_width = int(img.width * scale)
-        w_ratio = new_wm_width / float(wm_rgba.width)
-        new_wm_height = int(float(wm_rgba.height) * w_ratio)
-        
-        wm_resized = wm_rgba.resize((new_wm_width, new_wm_height), Image.Resampling.LANCZOS)
-        
-        x, y = 0, 0
-        if position == 'bottom-right': x, y = img.width - wm_resized.width - margin, img.height - wm_resized.height - margin
-        elif position == 'bottom-left': x, y = margin, img.height - wm_resized.height - margin
-        elif position == 'top-right': x, y = img.width - wm_resized.width - margin, margin
-        elif position == 'top-left': x, y = margin, margin
-        elif position == 'center': x, y = (img.width - wm_resized.width) // 2, (img.height - wm_resized.height) // 2
-        
-        # Накладання з маскою прозорості
-        img.paste(wm_resized, (x, y), wm_resized)
-
-    # 4. Фон для JPEG
-    if output_format == "JPEG":
-        background = Image.new("RGB", img.size, (255, 255, 255))
-        background.paste(img, mask=img.split()[3])
-        img = background
-    elif output_format == "RGB":
-         img = img.convert("RGB")
-
-    # 5. Збереження (HQ)
-    output_buffer = io.BytesIO()
-    if output_format == "JPEG":
-        img.save(output_buffer, format="JPEG", quality=quality, optimize=True, subsampling=0)
-    elif output_format == "WEBP":
-        img.save(output_buffer, format="WEBP", quality=quality, method=6)
-    elif output_format == "PNG":
-        img.save(output_buffer, format="PNG", optimize=True)
-
-    return output_buffer.getvalue(), img.size
-
-# --- ІНТЕРФЕЙС ---
-
-# ЗМІНА: Просто заголовок, без About справа
-st.title("📸 Watermarker Pro MaAn")
-st.markdown("---")
-
-# НАЛАШТУВАННЯ
-with st.expander("⚙️ **Налаштування**", expanded=True):
-    set_col1, set_col2, set_col3 = st.columns(3)
-    with set_col1:
-        st.subheader("1. Формат")
-        out_fmt = st.selectbox("Вихідний формат", ["JPEG", "WEBP", "PNG"])
-        prefix = st.text_input("Префікс", placeholder="photo_edit")
-    with set_col2:
-        st.subheader("2. Розміри")
-        resize_enabled = st.checkbox("Зменшувати розмір", value=True)
-        max_dim = 0
-        if resize_enabled:
-            max_dim = st.select_slider("Макс. сторона (px)", options=[800, 1024, 1280, 1920, 3840], value=1920)
+    st.divider()
+    st.header(T['sb_config'])
+    
+    with st.expander(T['sec_file'], expanded=False):
+        out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"])
         quality = 80
         if out_fmt != "PNG":
-            quality = st.slider("Якість", 50, 100, 80, 5)
-    with set_col3:
-        st.subheader("3. Логотип")
-        wm_file_upload = st.file_uploader("PNG Лого", type=["png"])
-        wm_settings = {}
-        if wm_file_upload:
-            wm_settings['position'] = st.selectbox("Позиція", ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center'])
-            wm_settings['scale'] = st.slider("Розмір (%)", 5, 50, 15) / 100
-            wm_settings['margin'] = st.slider("Відступ (px)", 0, 100, 15)
+            quality = st.slider(T['lbl_quality'], 50, 100, 80, 5)
+        
+        naming_mode = st.selectbox(T['lbl_naming'], ["Keep Original", "Prefix + Sequence", "Timestamp", "Original + Suffix", "Content Hash"], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
+        prefix = st.text_input(T['lbl_prefix'], placeholder="img")
 
-col_left, col_right = st.columns([1.5, 1], gap="large")
+    with st.expander(T['sec_geo'], expanded=True):
+        resize_on = st.checkbox(T['chk_resize'], value=True)
+        resize_mode = st.selectbox(T['lbl_resize_mode'], ["Max Side", "Exact Width", "Exact Height"], disabled=not resize_on, format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
+        
+        st.write(T['lbl_presets'])
+        col_p1, col_p2, col_p3 = st.columns(3)
+        def set_res(val): st.session_state['resize_val_state'] = val
+        with col_p1: st.button("HD", on_click=set_res, args=(1280,), disabled=not resize_on, use_container_width=True)
+        with col_p2: st.button("FHD", on_click=set_res, args=(1920,), disabled=not resize_on, use_container_width=True)
+        with col_p3: st.button("4K", on_click=set_res, args=(3840,), disabled=not resize_on, use_container_width=True)
+        
+        resize_val = st.number_input(T['lbl_resize_val'], min_value=100, max_value=8000, step=100, key='resize_val_state', disabled=not resize_on)
 
-# === ЛІВА ЧАСТИНА ===
-with col_left:
-    st.header("📂 Менеджер файлів")
-    
-    uploaded = st.file_uploader(
-        "Додати файли", 
-        type=['png', 'jpg', 'jpeg', 'bmp', 'webp'], 
-        accept_multiple_files=True,
-        key=f"uploader_{st.session_state['uploader_key']}"
-    )
+    with st.expander(T['sec_wm'], expanded=True):
+        wm_file = st.file_uploader(T['lbl_wm_upload'], type=["png"])
+        wm_pos = st.selectbox(T['lbl_wm_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center'], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
+        wm_scale = st.slider(T['lbl_wm_scale'], 5, 50, 15) / 100
+        wm_opacity = st.slider(T['lbl_wm_opacity'], 0.1, 1.0, 1.0, 0.1)
+        wm_margin = st.slider(T['lbl_wm_margin'], 0, 100, 15)
+        
+    st.divider()
+    with st.expander("ℹ️ About"):
+        st.markdown(T['about_prod']); st.markdown(T['about_auth']); st.markdown(T['about_lic']); st.markdown(T['about_repo']); st.caption(T['about_copy'])
+
+# Main Area
+st.title(T['title'])
+c_left, c_right = st.columns([1.5, 1], gap="large")
+
+with c_left:
+    st.subheader(T['files_header'])
+    uploaded = st.file_uploader(T['uploader_label'], type=['png', 'jpg', 'jpeg', 'webp'], accept_multiple_files=True, label_visibility="collapsed", key=f"up_{st.session_state['uploader_key']}")
     
     if uploaded:
         for f in uploaded:
             if f.name not in st.session_state['file_cache']:
-                st.session_state['file_cache'][f.name] = f
+                st.session_state['file_cache'][f.name] = f.getvalue()
         st.session_state['uploader_key'] += 1
         st.rerun()
 
-    files_list = list(st.session_state['file_cache'].values())
-    preview_file_name = None
+    files_map = st.session_state['file_cache']
+    files_names = list(files_map.keys())
     
-    if files_list:
+    if files_names:
         table_data = []
-        for f in files_list:
-            w, h, size = get_image_info(f)
-            table_data.append({
-                "Обрати": False,
-                "Файл": f.name,
-                "Розмір": f"{size/1024:.1f} KB",
-                "Інфо": f"{w}x{h}"
-            })
-        
+        for fname in files_names:
+            fbytes = files_map[fname]
+            # Використовуємо проксі-функцію з кешем
+            w, h, size, fmt = ui_get_metadata(fbytes)
+            table_data.append({"Select": False, "Name": fname, "Size": f"{size/1024:.1f} KB", "Res": f"{w}x{h}", "Fmt": fmt})
+            
         df = pd.DataFrame(table_data)
-        
-        st.caption("Позначте файли галочкою **Обрати**, щоб побачити Прев'ю або Видалити.")
-        
-        edited_df = st.data_editor(
-            df,
-            column_config={
-                "Обрати": st.column_config.CheckboxColumn("✅", help="Вибрати для дій", default=False),
-                "Файл": st.column_config.TextColumn("Ім'я файлу", disabled=True),
-                "Розмір": st.column_config.TextColumn("Вага", disabled=True),
-                "Інфо": st.column_config.TextColumn("px", disabled=True),
-            },
-            hide_index=True,
-            use_container_width=True,
-            key="files_editor"
-        )
-        
-        selected_rows = edited_df[edited_df["Обрати"] == True]
-        selected_filenames = selected_rows["Файл"].tolist()
-        
-        if selected_filenames:
-            preview_file_name = selected_filenames[-1]
-        
-        # === ПАНЕЛЬ ДІЙ ===
-        c_act1, c_act2, c_act3 = st.columns([1, 1, 1.2])
-        
-        with c_act1:
-            if selected_filenames:
-                if st.button(f"🗑️ Видалити ({len(selected_filenames)})", type="secondary", use_container_width=True):
-                    for fname in selected_filenames:
-                        del st.session_state['file_cache'][fname]
-                    st.rerun()
-            else:
-                 st.button("🗑️ Видалити", disabled=True, use_container_width=True)
+        edited_df = st.data_editor(df, column_config={"Select": st.column_config.CheckboxColumn(T['tbl_select'], default=False), "Name": st.column_config.TextColumn(T['tbl_name'], disabled=True)}, hide_index=True, use_container_width=True, key="editor_in")
+        selected_files = edited_df[edited_df["Select"] == True]["Name"].tolist()
+        preview_target = selected_files[-1] if selected_files else None
 
-        with c_act2:
-            if st.button("♻️ Очистити все", type="secondary", use_container_width=True):
-                st.session_state['file_cache'] = {}
-                st.session_state['res_list'] = []
-                st.session_state['res_zip'] = None
-                st.session_state['uploader_key'] += 1
+        act1, act2, act3 = st.columns([1, 1, 1.5])
+        with act1:
+            if st.button(T['btn_delete'], disabled=not selected_files, use_container_width=True):
+                for fn in selected_files: del st.session_state['file_cache'][fn]
                 st.rerun()
-
-        with c_act3:
-            if st.button(f"🚀 Обробити ({len(files_list)})", type="primary", use_container_width=True):
+        with act2:
+            if st.button(T['btn_reset'], use_container_width=True):
+                st.session_state['file_cache'] = {}; st.session_state['results'] = None; st.rerun()
+        with act3:
+            if st.button(f"{T['btn_process']} ({len(files_names)})", type="primary", use_container_width=True):
                 progress_bar = st.progress(0)
                 status = st.empty()
-                results = []
-                report = []
-                total_orig = 0
-                total_new = 0
                 
-                wm_obj = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
-                zip_buf = io.BytesIO()
+                # Підготовка ресурсів
+                wm_bytes = wm_file.getvalue() if wm_file else None
+                wm_cached_obj = ui_load_watermark(wm_bytes, wm_opacity)
                 
-                with zipfile.ZipFile(zip_buf, "w") as zf:
-                    count = len(files_list)
-                    for i, file_obj in enumerate(files_list):
-                        status.text(f"Обробка: {file_obj.name}...")
-                        w, h, orig_b = get_image_info(file_obj)
-                        total_orig += orig_b
+                resize_cfg = {'enabled': resize_on, 'mode': resize_mode, 'value': resize_val, 'wm_scale': wm_scale, 'wm_margin': wm_margin, 'wm_position': wm_pos}
+                
+                results_list = []
+                report_list = []
+                zip_buffer = io.BytesIO()
+                total_files = len(files_names)
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    futures = {}
+                    for i, fname in enumerate(files_names):
+                        fbytes = files_map[fname]
+                        ext = out_fmt.lower()
+                        # Виклик backend-функції для генерації імені
+                        new_fname = engine.generate_filename(fname, naming_mode, prefix, ext, index=i+1, file_bytes=fbytes)
                         
-                        try:
-                            res_bytes, (nw, nh) = process_single_image(
-                                file_obj, wm_obj, max_dim, quality, wm_settings if wm_obj else None, out_fmt
-                            )
-                            total_new += len(res_bytes)
-                            
-                            ext = out_fmt.lower()
-                            new_name = get_safe_filename(file_obj.name, prefix, ext)
-                            
-                            zf.writestr(new_name, res_bytes)
-                            results.append((new_name, res_bytes))
-                            
-                            report.append({
-                                "Файл": new_name,
-                                "Економія": ((orig_b - len(res_bytes))/orig_b)*100,
-                                "Розмір": f"{nw}x{nh}"
-                            })
-                        except Exception as e: st.error(f"Err: {e}")
-                        progress_bar.progress((i+1)/count)
-                
-                status.success("Готово!")
-                st.session_state['res_zip'] = zip_buf.getvalue()
-                st.session_state['res_list'] = results
-                st.session_state['res_report'] = report
-                st.session_state['res_stats'] = {'orig': total_orig, 'new': total_new}
+                        # Виклик backend-функції обробки
+                        future = executor.submit(engine.process_image, fbytes, new_fname, wm_cached_obj, resize_cfg, out_fmt, quality)
+                        futures[future] = fname
 
-    # === РЕЗУЛЬТАТИ ===
-    if 'res_list' in st.session_state and st.session_state['res_list']:
+                    with zipfile.ZipFile(zip_buffer, "w") as zf:
+                        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+                            try:
+                                res_bytes, stats = future.result()
+                                zf.writestr(stats['filename'], res_bytes)
+                                results_list.append((stats['filename'], res_bytes))
+                                report_list.append(stats)
+                            except Exception as e: st.error(f"Error: {e}")
+                            progress_bar.progress((i + 1) / total_files)
+
+                status.success(T['msg_done'])
+                st.session_state['results'] = {'zip': zip_buffer.getvalue(), 'files': results_list, 'report': report_list}
+
+    if 'results' in st.session_state and st.session_state['results']:
+        res = st.session_state['results']
+        report = res['report']
+        total_orig = sum(r['orig_size'] for r in report)
+        total_new = sum(r['new_size'] for r in report)
+        saved_mb = (total_orig - total_new) / (1024*1024)
+        
         st.divider()
-        stats = st.session_state['res_stats']
-        saved_mb = (stats['orig'] - stats['new']) / (1024*1024)
+        st.success(f"{T['res_savings']}: **{saved_mb:.2f} MB**")
+        st.download_button(T['btn_dl_zip'], res['zip'], f"batch_{datetime.now().strftime('%H%M')}.zip", "application/zip", type="primary", use_container_width=True)
         
-        st.success(f"Економія: **{saved_mb:.1f} MB**")
-        st.download_button("📦 Скачати ZIP", st.session_state['res_zip'], "photos.zip", "application/zip", type="primary", use_container_width=True)
-        
-        with st.expander("📊 Детальний звіт"):
-            st.dataframe(pd.DataFrame(st.session_state['res_report']), use_container_width=True, column_config={"Економія": st.column_config.ProgressColumn(format="%f", min_value=0, max_value=100)})
+        with st.expander(T['exp_report']):
+            df_rep = pd.DataFrame(report)
+            df_rep['savings %'] = ((df_rep['orig_size'] - df_rep['new_size']) / df_rep['orig_size'] * 100).round(1)
+            st.dataframe(df_rep, column_config={"savings %": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%f%%")}, use_container_width=True)
+            
+        with st.expander(T['exp_dl_separate']):
+            for name, data in res['files']:
+                c1, c2 = st.columns([3, 1])
+                c1.write(f"📄 {name}")
+                c2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
 
-        with st.expander("⬇️ Скачати окремо"):
-            for idx, (fname, fbytes) in enumerate(st.session_state['res_list']):
-                col_dl1, col_dl2 = st.columns([4, 1])
-                with col_dl1: st.write(f"📄 {fname} ({len(fbytes)/1024:.1f} KB)")
-                with col_dl2: st.download_button("⬇️", data=fbytes, file_name=fname, mime=f"image/{out_fmt.lower()}", key=f"btn_dl_{idx}")
-
-# === ПРАВА ЧАСТИНА: ПРЕВ'Ю ===
-with col_right:
-    st.header("👁️ Прев'ю")
-    
+with c_right:
+    st.subheader(T['prev_header'])
     with st.container(border=True):
-        if preview_file_name and preview_file_name in st.session_state['file_cache']:
-            
-            target_file = st.session_state['file_cache'][preview_file_name]
-            orig_w, orig_h, orig_s = get_image_info(target_file)
-            
-            wm_obj_preview = Image.open(wm_file_upload).convert("RGBA") if wm_file_upload else None
-            
+        if 'preview_target' in locals() and preview_target:
+            raw_bytes = files_map[preview_target]
+            wm_bytes = wm_file.getvalue() if wm_file else None
+            wm_obj = ui_load_watermark(wm_bytes, wm_opacity)
+            resize_cfg = {'enabled': resize_on, 'mode': resize_mode, 'value': resize_val, 'wm_scale': wm_scale, 'wm_margin': wm_margin, 'wm_position': wm_pos}
             try:
-                with st.spinner("Генерація..."):
-                    res_bytes, (nw, nh) = process_single_image(
-                        target_file, wm_obj_preview, max_dim, quality, 
-                        wm_settings if wm_obj_preview else None, out_fmt
-                    )
-                
-                st.image(res_bytes, caption=f"Результат: {preview_file_name}", use_container_width=True)
-                
-                delta = ((len(res_bytes) - orig_s) / orig_s) * 100
-                col_m1, col_m2 = st.columns(2)
-                col_m1.metric("Розміри", f"{nw}x{nh}")
-                col_m2.metric("Вага", f"{len(res_bytes)/1024:.0f} KB", f"{delta:.1f}%", delta_color="inverse")
-                
-            except Exception as e:
-                st.error(f"Помилка: {e}")
-                
-        elif files_list:
-            st.info("⬅️ Оберіть файл ✅ для перегляду.")
-            st.markdown('<div style="height:200px; display:flex; align-items:center; justify-content:center; color:#ccc;">...</div>', unsafe_allow_html=True)
+                with st.spinner(T['prev_rendering']):
+                    preview_name = engine.generate_filename(preview_target, naming_mode, prefix, out_fmt.lower(), index=1, file_bytes=raw_bytes)
+                    p_bytes, p_stats = engine.process_image(raw_bytes, preview_name, wm_obj, resize_cfg, out_fmt, quality)
+                st.image(p_bytes, caption=f"Preview: {preview_name}", use_container_width=True)
+                k1, k2 = st.columns(2)
+                k1.metric(T['prev_size'], p_stats['new_res'], p_stats['scale_factor'])
+                delta = ((p_stats['new_size'] - p_stats['orig_size']) / p_stats['orig_size']) * 100
+                k2.metric(T['prev_weight'], f"{p_stats['new_size']/1024:.1f} KB", f"{delta:.1f}%", delta_color="inverse")
+            except Exception as e: st.error(f"Error: {e}")
         else:
-            st.info("Завантажте файли зліва.")
-            st.markdown('<div style="height:200px; display:flex; align-items:center; justify-content:center; color:#ccc;">Немає файлів</div>', unsafe_allow_html=True)
-
-    # === НОВЕ РОЗМІЩЕННЯ ABOUT ===
-    st.divider()
-    with st.expander("ℹ️ About"):
-        st.markdown("**Product:** Watermarker Pro MaAn")
-        st.markdown("**Author:** Marynyuk Andriy")
-        st.markdown("**License:** Proprietary")
-        st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
-        st.caption("© 2025 All rights reserved")
+            st.info(T['prev_info'])
+            st.markdown('<div style="height:300px; background:#f0f2f6;"></div>', unsafe_allow_html=True)
