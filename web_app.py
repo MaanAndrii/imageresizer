@@ -14,7 +14,7 @@ st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="
 # ==========================================
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v4.5",
+        "title": "📸 Watermarker Pro v4.6",
         "lang_select": "Мова / Language",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
@@ -36,10 +36,10 @@ TRANSLATIONS = {
         "btn_delete": "🗑️ Видалити", "btn_reset": "♻️ Очистити список", "btn_process": "🚀 Обробити", "msg_done": "Готово!",
         "res_savings": "Економія", "btn_dl_zip": "📦 Скачати ZIP", "exp_report": "📊 Технічний звіт", "exp_dl_separate": "⬇️ Скачати окремо",
         "prev_header": "👁️ Живий перегляд", "prev_rendering": "Генерація...", "prev_size": "Розмір", "prev_weight": "Вага", "prev_info": "Оберіть файл (✅) для тесту.",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.5", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.6", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
     },
     "en": {
-        "title": "📸 Watermarker Pro v4.5",
+        "title": "📸 Watermarker Pro v4.6",
         "lang_select": "Language / Мова",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset to Defaults",
@@ -61,7 +61,7 @@ TRANSLATIONS = {
         "btn_delete": "🗑️ Delete", "btn_reset": "♻️ Clear List", "btn_process": "🚀 Process", "msg_done": "Done!",
         "res_savings": "Savings", "btn_dl_zip": "📦 Download ZIP", "exp_report": "📊 Technical Report", "exp_dl_separate": "⬇️ Download Separate",
         "prev_header": "👁️ Live Preview", "prev_rendering": "Rendering...", "prev_size": "Dimensions", "prev_weight": "Weight", "prev_info": "Select a file (✅) to preview.",
-        "about_prod": "**Product:** Watermarker Pro MaAn v4.5", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
+        "about_prod": "**Product:** Watermarker Pro MaAn v4.6", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
     }
 }
 
@@ -85,14 +85,34 @@ def ui_get_metadata(file_bytes): return engine.get_image_metadata(file_bytes)
 @st.cache_resource(show_spinner=False)
 def ui_load_watermark(wm_bytes, opacity): return engine.load_and_process_watermark(wm_bytes, opacity)
 
-# --- CALLBACKS ---
+# --- CALLBACKS & LOGIC ---
+
+def handle_pos_change():
+    """Автоматично змінює параметри при зміні типу позиції."""
+    new_pos = st.session_state['wm_pos_key']
+    
+    if new_pos == 'tiled':
+        # Специфічні налаштування для ЗАМОЩЕННЯ
+        st.session_state['wm_scale_key'] = 15
+        st.session_state['wm_opacity_key'] = 0.3  # 30%
+        st.session_state['wm_margin_key'] = 30    # 30px gap
+        st.session_state['wm_angle_key'] = 45     # 45 deg
+    else:
+        # Стандартні налаштування для КУТІВ
+        st.session_state['wm_scale_key'] = 15
+        st.session_state['wm_opacity_key'] = 1.0  # 100%
+        st.session_state['wm_margin_key'] = 15    # 15px edge
+        st.session_state['wm_angle_key'] = 0
+
 def reset_settings():
-    """Скидає налаштування до базових (кутових) значень."""
+    """Скидає все до заводського стану (Кут знизу-праворуч)."""
     st.session_state['resize_val_state'] = 1920
-    # ПАРАМЕТРИ ЗА ЗАМОВЧУВАННЯМ (для кутів)
-    st.session_state['wm_scale_key'] = 15     # 15%
-    st.session_state['wm_opacity_key'] = 1.0  # 100% непрозорість
-    st.session_state['wm_margin_key'] = 15    # 15px відступ
+    # Повертаємо селектбокс у дефолт
+    st.session_state['wm_pos_key'] = 'bottom-right'
+    # Застосовуємо дефолтні значення для кутів
+    st.session_state['wm_scale_key'] = 15
+    st.session_state['wm_opacity_key'] = 1.0
+    st.session_state['wm_margin_key'] = 15
     st.session_state['wm_angle_key'] = 0
 
 # --- UI IMPLEMENTATION ---
@@ -100,12 +120,13 @@ if 'file_cache' not in st.session_state: st.session_state['file_cache'] = {}
 if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
 if 'lang_code' not in st.session_state: st.session_state['lang_code'] = 'ua'
 
-# ІНІЦІАЛІЗАЦІЯ ПАРАМЕТРІВ ПРИ ПЕРШОМУ ЗАПУСКУ
+# Початкова ініціалізація (First Run)
 defaults = {
     'resize_val_state': 1920,
-    'wm_scale_key': 15,    # Default: 15%
-    'wm_opacity_key': 1.0, # Default: 1.0
-    'wm_margin_key': 15,   # Default: 15px
+    'wm_pos_key': 'bottom-right',
+    'wm_scale_key': 15,
+    'wm_opacity_key': 1.0,
+    'wm_margin_key': 15,
     'wm_angle_key': 0
 }
 for k, v in defaults.items():
@@ -121,7 +142,6 @@ with st.sidebar:
         out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"])
         quality = 80
         if out_fmt != "PNG": quality = st.slider(T['lbl_quality'], 50, 100, 80, 5)
-        # ЗАЛИШЕНО ТІЛЬКИ ДВІ СТРАТЕГІЇ
         naming_mode = st.selectbox(T['lbl_naming'], ["Keep Original", "Prefix + Sequence"], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
         prefix = st.text_input(T['lbl_prefix'], placeholder="img")
 
@@ -139,8 +159,15 @@ with st.sidebar:
     with st.expander(T['sec_wm'], expanded=True):
         wm_file = st.file_uploader(T['lbl_wm_upload'], type=["png"])
         
-        # ПРИБРАНО 'center' ЗІ СПИСКУ
-        wm_pos = st.selectbox(T['lbl_wm_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'tiled'], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
+        # ВИБІР ПОЗИЦІЇ З CALLBACK
+        # Додано on_change=handle_pos_change
+        wm_pos = st.selectbox(
+            T['lbl_wm_pos'], 
+            ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'tiled'], 
+            key='wm_pos_key',
+            on_change=handle_pos_change, 
+            format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x)
+        )
         
         wm_scale = st.slider(T['lbl_wm_scale'], 5, 50, key='wm_scale_key') / 100
         wm_opacity = st.slider(T['lbl_wm_opacity'], 0.1, 1.0, key='wm_opacity_key')
@@ -149,7 +176,7 @@ with st.sidebar:
             wm_angle = st.slider(T['lbl_wm_angle'], -180, 180, key='wm_angle_key')
             wm_margin = st.slider(T['lbl_wm_margin_gap'], 0, 200, key='wm_margin_key')
         else:
-            wm_angle = 0
+            wm_angle = 0 # Для бекенда передаємо 0, хоча слайдер приховано
             wm_margin = st.slider(T['lbl_wm_margin_edge'], 0, 100, key='wm_margin_key')
 
     st.divider()
@@ -277,9 +304,7 @@ with c_right:
                 with st.spinner(T['prev_rendering']):
                     preview_name = engine.generate_filename(preview_target, naming_mode, prefix, out_fmt.lower(), index=1, file_bytes=raw_bytes)
                     p_bytes, p_stats = engine.process_image(raw_bytes, preview_name, wm_obj, resize_cfg, out_fmt, quality)
-                # ПОКАЗ ІМЕНІ ПІД ПРЕВ'Ю
                 st.image(p_bytes, caption=f"Preview: {preview_name}", use_container_width=True)
-                
                 k1, k2 = st.columns(2)
                 k1.metric(T['prev_size'], p_stats['new_res'], p_stats['scale_factor'])
                 delta = ((p_stats['new_size'] - p_stats['orig_size']) / p_stats['orig_size']) * 100
