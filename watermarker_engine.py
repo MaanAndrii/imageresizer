@@ -2,14 +2,17 @@ import io
 import os
 import re
 import hashlib
+import math
 from datetime import datetime
 from PIL import Image, ImageEnhance
 from translitua import translit
 
 """
-Watermarker Pro Engine v4.1
+Watermarker Pro Engine v4.2
 ---------------------------
-Added: Tiling (Pattern) support.
+Added: 
+- Rotation support (Angle).
+- Advanced Tiling algorithm (creates a separate layer).
 """
 
 def generate_filename(original_name: str, naming_mode: str, prefix: str = "", extension: str = "jpg", index: int = 1, file_bytes: bytes = None) -> str:
@@ -63,7 +66,7 @@ def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Im
 
 
 def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int) -> tuple:
-    """Основна функція обробки зображення з підтримкою Tiling."""
+    """Основна функція обробки зображення."""
     input_io = io.BytesIO(file_bytes)
     img = Image.open(input_io)
     
@@ -101,10 +104,11 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
     # --- WATERMARK LOGIC ---
     if wm_obj:
         scale = resize_config.get('wm_scale', 0.15)
-        margin = resize_config.get('wm_margin', 15)
+        margin = resize_config.get('wm_margin', 50) # Відступ або проміжок
         position = resize_config.get('wm_position', 'bottom-right')
+        angle = resize_config.get('wm_angle', 0)
         
-        # Розрахунок розміру
+        # 1. Базовий ресайз вотермарки
         wm_w_target = int(new_w * scale)
         if wm_w_target < 1: wm_w_target = 1
         
@@ -113,31 +117,54 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
         if wm_h_target < 1: wm_h_target = 1
         
         wm_resized = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
-        
-        # === NEW: TILING LOGIC ===
+
+        # 2. Поворот вотермарки (для обох режимів)
+        # expand=True важливо, щоб при повороті кути не обрізались
+        if angle != 0:
+            wm_resized = wm_resized.rotate(angle, expand=True, resample=Image.BICUBIC)
+
+        wm_w_final, wm_h_final = wm_resized.size
+
+        # 3. Накладання
         if position == 'tiled':
-            # Проходимо циклом по всій площі
-            step_x = wm_resized.width + margin
-            step_y = wm_resized.height + margin
+            # === TILING ALGORITHM ===
+            # Створюємо прозорий шар розміром з картинку
+            overlay = Image.new('RGBA', (new_w, new_h), (0, 0, 0, 0))
             
-            # Додаємо margin/2 для центрування сітки (опційно, але виглядає краще)
-            start_y = margin
-            while start_y < new_h:
-                start_x = margin
-                while start_x < new_w:
-                    img.paste(wm_resized, (start_x, start_y), wm_resized)
-                    start_x += step_x
-                start_y += step_y
+            # Визначаємо крок (розмір лого + відступ)
+            step_x = wm_w_final + margin
+            step_y = wm_h_final + margin
+            
+            # Якщо лого дуже велике або margin великий, щоб не було вічного циклу
+            if step_x < 1: step_x = 1
+            if step_y < 1: step_y = 1
+
+            # Цикл по всій площині
+            # Починаємо з 0, йдемо до кінця
+            for y in range(0, new_h, step_y):
+                for x in range(0, new_w, step_x):
+                    overlay.paste(wm_resized, (x, y), wm_resized)
+            
+            # Накладаємо шар з патерном на основне фото
+            img = Image.alpha_composite(img, overlay)
                 
         else:
-            # Стандартне позиціонування
+            # === SINGLE POSITION ALGORITHM ===
             pos_x, pos_y = 0, 0
-            if position == 'bottom-right': pos_x, pos_y = new_w - wm_w_target - margin, new_h - wm_h_target - margin
-            elif position == 'bottom-left': pos_x, pos_y = margin, new_h - wm_h_target - margin
-            elif position == 'top-right': pos_x, pos_y = new_w - wm_w_target - margin, margin
-            elif position == 'top-left': pos_x, pos_y = margin, margin
-            elif position == 'center': pos_x, pos_y = (new_w - wm_w_target) // 2, (new_h - wm_h_target) // 2
             
+            if position == 'bottom-right': 
+                pos_x, pos_y = new_w - wm_w_final - margin, new_h - wm_h_final - margin
+            elif position == 'bottom-left': 
+                pos_x, pos_y = margin, new_h - wm_h_final - margin
+            elif position == 'top-right': 
+                pos_x, pos_y = new_w - wm_w_final - margin, margin
+            elif position == 'top-left': 
+                pos_x, pos_y = margin, margin
+            elif position == 'center': 
+                pos_x, pos_y = (new_w - wm_w_final) // 2, (new_h - wm_h_final) // 2
+            
+            # Накладаємо один раз
+            # Перевірка на вихід за межі (хоча paste дозволяє від'ємні)
             img.paste(wm_resized, (pos_x, pos_y), wm_resized)
 
     # --- EXPORT ---
