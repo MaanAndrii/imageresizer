@@ -10,44 +10,46 @@ import os
 from datetime import datetime
 import re
 
-# --- КОНФІГУРАЦІЯ СТОРІНКИ ---
+# --- КОНФІГУРАЦІЯ ---
 st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
 
 # ==========================================
-# 🌐 ЛОКАЛІЗАЦІЯ (LANGUAGE FILES)
+# 🌐 ЛОКАЛІЗАЦІЯ
 # ==========================================
 
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v3.1",
-        "settings_title": "⚙️ Конфігурація",
+        "title": "📸 Watermarker Pro v3.2",
         "lang_select": "Мова / Language",
         
-        # Секція 1: Файл
-        "sec_file": "1. Файл та Ім'я",
+        # Сайдбар заголовки
+        "sb_config": "🛠 Налаштування",
+        "sec_file": "1. Формат та Ім'я",
+        "sec_geo": "2. Геометрія (Ресайз)",
+        "sec_wm": "3. Вотермарка",
+        
+        # Файл
         "lbl_format": "Формат",
         "lbl_quality": "Якість",
         "lbl_naming": "Стратегія імен",
         "lbl_prefix": "Префікс",
-        "ph_prefix": "img",
         
-        # Секція 2: Геометрія
-        "sec_geo": "2. Геометрія",
+        # Геометрія
         "chk_resize": "Змінювати розмір",
-        "lbl_resize_mode": "Режим ресайзу",
-        "lbl_resize_val": "Значення (px)",
+        "lbl_resize_mode": "Режим",
+        "lbl_resize_val": "Розмір (px)",
+        "lbl_presets": "Швидкі пресети:",
         
-        # Секція 3: Вотермарка
-        "sec_wm": "3. Вотермарка",
-        "lbl_wm_upload": "Лого (PNG)",
+        # Вотермарка
+        "lbl_wm_upload": "Завантажити лого (PNG)",
         "lbl_wm_pos": "Позиція",
-        "lbl_wm_scale": "Розмір (%)",
+        "lbl_wm_scale": "Масштаб (%)",
         "lbl_wm_opacity": "Прозорість",
         "lbl_wm_margin": "Відступ (px)",
 
-        # Менеджер файлів
-        "files_header": "📂 Вхідні файли",
-        "uploader_label": "Перетягніть файли сюди",
+        # Головне вікно
+        "files_header": "📂 Робоча область",
+        "uploader_label": "Файли",
         "tbl_select": "✅",
         "tbl_name": "Файл",
         "btn_delete": "🗑️ Видалити",
@@ -55,52 +57,50 @@ TRANSLATIONS = {
         "btn_process": "🚀 Обробити",
         "msg_done": "Готово!",
         
-        # Результати
         "res_savings": "Економія",
-        "btn_dl_zip": "📦 Скачати ZIP архів",
-        "exp_report": "📊 Детальний звіт (Технічний)",
+        "btn_dl_zip": "📦 Скачати ZIP",
+        "exp_report": "📊 Технічний звіт",
         "exp_dl_separate": "⬇️ Скачати окремо",
         
-        # Прев'ю
-        "prev_header": "👁️ Прев'ю",
-        "prev_rendering": "Рендеринг...",
+        "prev_header": "👁️ Живий перегляд",
+        "prev_rendering": "Генерація...",
         "prev_size": "Розмір",
         "prev_weight": "Вага",
-        "prev_info_select": "Виберіть файл зліва (✅), щоб побачити результат.",
+        "prev_info": "Оберіть файл (✅) для тесту.",
         
-        # About
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v3.1",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v3.2",
         "about_auth": "**Автор:** Marynyuk Andriy",
         "about_lic": "**Ліцензія:** Proprietary",
-        "about_repo": "[Репозиторій GitHub](https://github.com/MaanAndrii)",
+        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)",
         "about_copy": "© 2025 Всі права захищено"
     },
     "en": {
-        "title": "📸 Watermarker Pro v3.1",
-        "settings_title": "⚙️ Configuration",
+        "title": "📸 Watermarker Pro v3.2",
         "lang_select": "Language / Мова",
         
-        "sec_file": "1. File & Name",
-        "lbl_format": "Format",
+        "sb_config": "🛠 Configuration",
+        "sec_file": "1. File & Naming",
+        "sec_geo": "2. Geometry (Resize)",
+        "sec_wm": "3. Watermark",
+        
+        "lbl_format": "Output Format",
         "lbl_quality": "Quality",
         "lbl_naming": "Naming Strategy",
-        "lbl_prefix": "Prefix",
-        "ph_prefix": "img",
+        "lbl_prefix": "Filename Prefix",
         
-        "sec_geo": "2. Geometry",
-        "chk_resize": "Resize Image",
-        "lbl_resize_mode": "Resize Mode",
-        "lbl_resize_val": "Value (px)",
+        "chk_resize": "Enable Resize",
+        "lbl_resize_mode": "Mode",
+        "lbl_resize_val": "Size (px)",
+        "lbl_presets": "Quick Presets:",
         
-        "sec_wm": "3. Watermark",
-        "lbl_wm_upload": "Logo (PNG)",
+        "lbl_wm_upload": "Upload Logo (PNG)",
         "lbl_wm_pos": "Position",
         "lbl_wm_scale": "Scale (%)",
         "lbl_wm_opacity": "Opacity",
         "lbl_wm_margin": "Margin (px)",
 
-        "files_header": "📂 Input Files",
-        "uploader_label": "Drop files here",
+        "files_header": "📂 Workspace",
+        "uploader_label": "Files",
         "tbl_select": "✅",
         "tbl_name": "File",
         "btn_delete": "🗑️ Delete",
@@ -110,16 +110,16 @@ TRANSLATIONS = {
         
         "res_savings": "Savings",
         "btn_dl_zip": "📦 Download ZIP",
-        "exp_report": "📊 Detailed Report",
+        "exp_report": "📊 Technical Report",
         "exp_dl_separate": "⬇️ Download Separate",
         
-        "prev_header": "👁️ Preview",
+        "prev_header": "👁️ Live Preview",
         "prev_rendering": "Rendering...",
         "prev_size": "Dimensions",
-        "prev_weight": "Size",
-        "prev_info_select": "Select a file on the left (✅) to see preview.",
+        "prev_weight": "Weight",
+        "prev_info": "Select a file (✅) to preview.",
         
-        "about_prod": "**Product:** Watermarker Pro MaAn v3.1",
+        "about_prod": "**Product:** Watermarker Pro MaAn v3.2",
         "about_auth": "**Author:** Marynyuk Andriy",
         "about_lic": "**License:** Proprietary",
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)",
@@ -127,47 +127,26 @@ TRANSLATIONS = {
     }
 }
 
-# Мапування опцій для Selectbox (Key -> Display Text)
 OPTIONS_MAP = {
     "ua": {
-        # Naming
-        "Timestamp": "Таймстемп",
-        "Original + Suffix": "Оригінал + Суфікс",
-        "Content Hash": "Хеш контенту",
-        # Resize Modes
-        "Max Side": "Макс. сторона",
-        "Exact Width": "Точна ширина",
-        "Exact Height": "Точна висота",
-        # Positions
-        "bottom-right": "Знизу-праворуч",
-        "bottom-left": "Знизу-ліворуч",
-        "top-right": "Зверху-праворуч",
-        "top-left": "Зверху-ліворуч",
-        "center": "Центр"
+        "Timestamp": "Таймстемп", "Original + Suffix": "Оригінал + Суфікс", "Content Hash": "Хеш контенту",
+        "Max Side": "Макс. сторона", "Exact Width": "Точна ширина", "Exact Height": "Точна висота",
+        "bottom-right": "Знизу-праворуч", "bottom-left": "Знизу-ліворуч", 
+        "top-right": "Зверху-праворуч", "top-left": "Зверху-ліворуч", "center": "Центр"
     },
     "en": {
-        # English maps to itself basically, but good for consistency
-        "Timestamp": "Timestamp",
-        "Original + Suffix": "Original + Suffix",
-        "Content Hash": "Content Hash",
-        "Max Side": "Max Side",
-        "Exact Width": "Exact Width",
-        "Exact Height": "Exact Height",
-        "bottom-right": "Bottom-Right",
-        "bottom-left": "Bottom-Left",
-        "top-right": "Top-Right",
-        "top-left": "Top-Left",
-        "center": "Center"
+        "Timestamp": "Timestamp", "Original + Suffix": "Original + Suffix", "Content Hash": "Content Hash",
+        "Max Side": "Max Side", "Exact Width": "Exact Width", "Exact Height": "Exact Height",
+        "bottom-right": "Bottom-Right", "bottom-left": "Bottom-Left", 
+        "top-right": "Top-Right", "top-left": "Top-Left", "center": "Center"
     }
 }
 
-# --- BACKEND LOGIC (Без змін, тільки технічні фікси) ---
-
+# --- BACKEND ---
 def generate_filename(original_name, naming_mode="Timestamp", prefix="", extension="jpg", file_bytes=None):
     name_only = os.path.splitext(original_name)[0]
     slug = re.sub(r'[\s\W_]+', '-', translit(name_only).lower()).strip('-')
     if not slug: slug = "image"
-    
     clean_prefix = re.sub(r'[\s\W_]+', '-', translit(prefix).lower()).strip('-') if prefix else ""
     base = f"{clean_prefix}_{slug}" if clean_prefix else slug
 
@@ -232,13 +211,11 @@ def process_image_core(file_bytes, filename, wm_obj, resize_config, output_fmt, 
         scale = resize_config['wm_scale']
         margin = resize_config['wm_margin']
         position = resize_config['wm_position']
-        
         wm_w_target = int(new_w * scale)
         if wm_w_target < 1: wm_w_target = 1
         w_ratio = wm_w_target / float(wm_obj.width)
         wm_h_target = int(float(wm_obj.height) * w_ratio)
         if wm_h_target < 1: wm_h_target = 1
-        
         wm_resized = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
         
         pos_x, pos_y = 0, 0
@@ -247,7 +224,6 @@ def process_image_core(file_bytes, filename, wm_obj, resize_config, output_fmt, 
         elif position == 'top-right': pos_x, pos_y = new_w - wm_w_target - margin, margin
         elif position == 'top-left': pos_x, pos_y = margin, margin
         elif position == 'center': pos_x, pos_y = (new_w - wm_w_target) // 2, (new_h - wm_h_target) // 2
-        
         img.paste(wm_resized, (pos_x, pos_y), wm_resized)
 
     if output_fmt == "JPEG":
@@ -278,75 +254,82 @@ def process_image_core(file_bytes, filename, wm_obj, resize_config, output_fmt, 
     }
     return result_bytes, stats
 
-# === UI LOGIC ===
+# === STATE INIT ===
+if 'file_cache' not in st.session_state: st.session_state['file_cache'] = {}
+if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
+# Ініціалізація значення ресайзу для пресетів
+if 'resize_val_state' not in st.session_state: st.session_state['resize_val_state'] = 1920
 
-if 'file_cache' not in st.session_state:
-    st.session_state['file_cache'] = {}
-if 'uploader_key' not in st.session_state:
-    st.session_state['uploader_key'] = 0
-
-# --- МОВОЗНАВЧИЙ БЛОК ---
-# Вибір мови в сайдбарі
-lang_choice = st.sidebar.selectbox("Language / Мова", ["Українська", "English"])
-lang_code = "ua" if lang_choice == "Українська" else "en"
-T = TRANSLATIONS[lang_code] # Шорткат для словника
-
-# --- ГОЛОВНА СТОРІНКА ---
-st.title(T['title'])
-st.markdown("---")
-
-# --- НАЛАШТУВАННЯ (SIDEBAR/EXPANDER) ---
-with st.expander(T['settings_title'], expanded=True):
-    c1, c2, c3 = st.columns(3)
+# === SIDEBAR ===
+with st.sidebar:
+    # 1. Мова
+    lang_choice = st.selectbox("Language / Мова", ["Українська", "English"])
+    lang_code = "ua" if lang_choice == "Українська" else "en"
+    T = TRANSLATIONS[lang_code]
     
-    with c1:
-        st.subheader(T['sec_file'])
+    st.divider()
+    st.header(T['sb_config'])
+    
+    # 2. Файл
+    with st.expander(T['sec_file'], expanded=False):
         out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"])
         quality = 80
         if out_fmt != "PNG":
             quality = st.slider(T['lbl_quality'], 50, 100, 80, 5)
         
-        # Використовуємо options map для перекладу опцій, але зберігаємо англійські ключі
-        naming_keys = ["Timestamp", "Original + Suffix", "Content Hash"]
-        naming_mode = st.selectbox(
-            T['lbl_naming'], 
-            options=naming_keys, 
-            format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x)
-        )
-        prefix = st.text_input(T['lbl_prefix'], placeholder=T['ph_prefix'])
-        
-    with c2:
-        st.subheader(T['sec_geo'])
-        resize_on = st.checkbox(T['chk_resize'], value=True)
-        
-        resize_keys = ["Max Side", "Exact Width", "Exact Height"]
-        resize_mode = st.selectbox(
-            T['lbl_resize_mode'], 
-            options=resize_keys, 
-            disabled=not resize_on,
-            format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x)
-        )
-        resize_val = st.number_input(T['lbl_resize_val'], min_value=100, max_value=8000, value=1920, step=100, disabled=not resize_on)
+        naming_mode = st.selectbox(T['lbl_naming'], options=["Timestamp", "Original + Suffix", "Content Hash"], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
+        prefix = st.text_input(T['lbl_prefix'], placeholder="img")
 
-    with c3:
-        st.subheader(T['sec_wm'])
-        wm_file = st.file_uploader(T['lbl_wm_upload'], type=["png"])
+    # 3. Геометрія + ПРЕСЕТИ
+    with st.expander(T['sec_geo'], expanded=True):
+        resize_on = st.checkbox(T['chk_resize'], value=True)
+        resize_mode = st.selectbox(T['lbl_resize_mode'], options=["Max Side", "Exact Width", "Exact Height"], disabled=not resize_on, format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
         
-        pos_keys = ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center']
-        wm_pos = st.selectbox(
-            T['lbl_wm_pos'], 
-            options=pos_keys,
-            format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x)
+        # --- БЛОК ПРЕСЕТІВ ---
+        st.write(T['lbl_presets'])
+        col_p1, col_p2, col_p3 = st.columns(3)
+        
+        # Функція колбек для кнопок
+        def set_res(val):
+            st.session_state['resize_val_state'] = val
+            
+        with col_p1: st.button("HD", on_click=set_res, args=(1280,), disabled=not resize_on, use_container_width=True, help="1280 px")
+        with col_p2: st.button("FHD", on_click=set_res, args=(1920,), disabled=not resize_on, use_container_width=True, help="1920 px")
+        with col_p3: st.button("4K", on_click=set_res, args=(3840,), disabled=not resize_on, use_container_width=True, help="3840 px")
+        # ---------------------
+        
+        resize_val = st.number_input(
+            T['lbl_resize_val'], 
+            min_value=100, max_value=8000, step=100, 
+            key='resize_val_state', # Прив'язуємо до Session State
+            disabled=not resize_on
         )
+
+    # 4. Вотермарка
+    with st.expander(T['sec_wm'], expanded=True):
+        wm_file = st.file_uploader(T['lbl_wm_upload'], type=["png"])
+        wm_pos = st.selectbox(T['lbl_wm_pos'], options=['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center'], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
         wm_scale = st.slider(T['lbl_wm_scale'], 5, 50, 15) / 100
         wm_opacity = st.slider(T['lbl_wm_opacity'], 0.1, 1.0, 1.0, 0.1)
         wm_margin = st.slider(T['lbl_wm_margin'], 0, 100, 15)
 
-# --- FILE MANAGER ---
+    st.divider()
+    with st.expander("ℹ️ About"):
+        st.markdown(T['about_prod'])
+        st.markdown(T['about_auth'])
+        st.markdown(T['about_lic'])
+        st.markdown(T['about_repo'])
+        st.caption(T['about_copy'])
+
+# === MAIN PAGE ===
+
+st.title(T['title'])
+
 c_left, c_right = st.columns([1.5, 1], gap="large")
 
+# --- FILE MANAGER ---
 with c_left:
-    st.header(T['files_header'])
+    st.subheader(T['files_header'])
     
     uploaded = st.file_uploader(T['uploader_label'], type=['png', 'jpg', 'jpeg', 'webp'], accept_multiple_files=True, label_visibility="collapsed", key=f"up_{st.session_state['uploader_key']}")
     
@@ -388,7 +371,7 @@ with c_left:
         selected_files = edited_df[edited_df["Select"] == True]["Name"].tolist()
         preview_target = selected_files[-1] if selected_files else None
 
-        # --- ACTIONS ---
+        # ACTIONS
         act1, act2, act3 = st.columns([1, 1, 1.5])
         with act1:
             if st.button(T['btn_delete'], disabled=not selected_files, use_container_width=True):
@@ -401,7 +384,6 @@ with c_left:
                 st.rerun()
         with act3:
             if st.button(f"{T['btn_process']} ({len(files_names)})", type="primary", use_container_width=True):
-                
                 progress_bar = st.progress(0)
                 status = st.empty()
                 
@@ -439,32 +421,19 @@ with c_left:
                             progress_bar.progress((i + 1) / total_files)
 
                 status.success(T['msg_done'])
-                st.session_state['results'] = {
-                    'zip': zip_buffer.getvalue(),
-                    'files': results_list,
-                    'report': report_list
-                }
+                st.session_state['results'] = {'zip': zip_buffer.getvalue(), 'files': results_list, 'report': report_list}
 
-    # --- OUTPUT SECTION ---
+    # OUTPUT
     if 'results' in st.session_state and st.session_state['results']:
         res = st.session_state['results']
         report = res['report']
-        
         total_orig = sum(r['orig_size'] for r in report)
         total_new = sum(r['new_size'] for r in report)
         saved_mb = (total_orig - total_new) / (1024*1024)
         
         st.divider()
         st.success(f"{T['res_savings']}: **{saved_mb:.2f} MB**")
-        
-        st.download_button(
-            label=T['btn_dl_zip'],
-            data=res['zip'],
-            file_name=f"batch_{datetime.now().strftime('%H%M')}.zip",
-            mime="application/zip",
-            type="primary",
-            use_container_width=True
-        )
+        st.download_button(T['btn_dl_zip'], res['zip'], f"batch_{datetime.now().strftime('%H%M')}.zip", "application/zip", type="primary", use_container_width=True)
         
         with st.expander(T['exp_report']):
             df_rep = pd.DataFrame(report)
@@ -473,13 +442,13 @@ with c_left:
             
         with st.expander(T['exp_dl_separate']):
             for name, data in res['files']:
-                col1, col2 = st.columns([3, 1])
-                col1.write(f"📄 {name}")
-                col2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
+                c1, c2 = st.columns([3, 1])
+                c1.write(f"📄 {name}")
+                c2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
 
-# --- RIGHT COLUMN: PREVIEW ---
+# --- PREVIEW ---
 with c_right:
-    st.header(T['prev_header'])
+    st.subheader(T['prev_header'])
     
     with st.container(border=True):
         if 'preview_target' in locals() and preview_target:
@@ -491,29 +460,15 @@ with c_right:
                 'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
                 'wm_scale': wm_scale, 'wm_margin': wm_margin, 'wm_position': wm_pos
             }
-            
             try:
                 with st.spinner(T['prev_rendering']):
                     p_bytes, p_stats = process_image_core(raw_bytes, "preview", wm_obj, resize_cfg, out_fmt, quality)
-                
                 st.image(p_bytes, caption=f"Preview: {preview_target}", use_container_width=True)
-                
                 k1, k2 = st.columns(2)
                 k1.metric(T['prev_size'], p_stats['new_res'], p_stats['scale_factor'])
                 delta = ((p_stats['new_size'] - p_stats['orig_size']) / p_stats['orig_size']) * 100
                 k2.metric(T['prev_weight'], f"{p_stats['new_size']/1024:.1f} KB", f"{delta:.1f}%", delta_color="inverse")
-                
-            except Exception as e:
-                st.error(f"Preview Error: {e}")
+            except Exception as e: st.error(f"Error: {e}")
         else:
-            st.info(T['prev_info_select'])
+            st.info(T['prev_info'])
             st.markdown('<div style="height:300px; background:#f0f2f6;"></div>', unsafe_allow_html=True)
-
-    # --- ABOUT ---
-    st.divider()
-    with st.expander("ℹ️ About"):
-        st.markdown(T['about_prod'])
-        st.markdown(T['about_auth'])
-        st.markdown(T['about_lic'])
-        st.markdown(T['about_repo'])
-        st.caption(T['about_copy'])
