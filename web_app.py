@@ -14,7 +14,7 @@ st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="
 # ==========================================
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v4.3",
+        "title": "📸 Watermarker Pro v4.4",
         "lang_select": "Мова / Language",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
@@ -36,10 +36,10 @@ TRANSLATIONS = {
         "btn_delete": "🗑️ Видалити", "btn_reset": "♻️ Очистити список", "btn_process": "🚀 Обробити", "msg_done": "Готово!",
         "res_savings": "Економія", "btn_dl_zip": "📦 Скачати ZIP", "exp_report": "📊 Технічний звіт", "exp_dl_separate": "⬇️ Скачати окремо",
         "prev_header": "👁️ Живий перегляд", "prev_rendering": "Генерація...", "prev_size": "Розмір", "prev_weight": "Вага", "prev_info": "Оберіть файл (✅) для тесту.",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.3", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.4", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
     },
     "en": {
-        "title": "📸 Watermarker Pro v4.3",
+        "title": "📸 Watermarker Pro v4.4",
         "lang_select": "Language / Мова",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset to Defaults",
@@ -61,7 +61,7 @@ TRANSLATIONS = {
         "btn_delete": "🗑️ Delete", "btn_reset": "♻️ Clear List", "btn_process": "🚀 Process", "msg_done": "Done!",
         "res_savings": "Savings", "btn_dl_zip": "📦 Download ZIP", "exp_report": "📊 Technical Report", "exp_dl_separate": "⬇️ Download Separate",
         "prev_header": "👁️ Live Preview", "prev_rendering": "Rendering...", "prev_size": "Dimensions", "prev_weight": "Weight", "prev_info": "Select a file (✅) to preview.",
-        "about_prod": "**Product:** Watermarker Pro MaAn v4.3", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
+        "about_prod": "**Product:** Watermarker Pro MaAn v4.4", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
     }
 }
 
@@ -87,42 +87,40 @@ def ui_load_watermark(wm_bytes, opacity): return engine.load_and_process_waterma
 
 # --- CALLBACKS ---
 def reset_settings():
-    """Скидає налаштування до заводських значень."""
+    """Скидає налаштування до нових значень за замовчуванням."""
     st.session_state['resize_val_state'] = 1920
-    # ВИПРАВЛЕНО: тут має бути 15 (ціле число), а не 0.15
-    st.session_state['wm_scale_key'] = 15 
-    st.session_state['wm_opacity_key'] = 1.0
-    st.session_state['wm_margin_key'] = 15
-    st.session_state['wm_angle_key'] = 0
+    st.session_state['wm_scale_key'] = 15
+    # НОВІ ЗАВОДСЬКІ ПАРАМЕТРИ
+    st.session_state['wm_opacity_key'] = 0.3  # Прозорість 30%
+    st.session_state['wm_margin_key'] = 30    # Відступ 30px
+    st.session_state['wm_angle_key'] = 45     # Кут 45 градусів
 
 # --- UI IMPLEMENTATION ---
 if 'file_cache' not in st.session_state: st.session_state['file_cache'] = {}
 if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
 
-# Ініціалізація значень за замовчуванням
+# Ініціалізація мови в Session State
+if 'lang_code' not in st.session_state: st.session_state['lang_code'] = 'ua'
+
+# Ініціалізація значень параметрів
 defaults = {
     'resize_val_state': 1920,
-    'wm_scale_key': 15, # ВИПРАВЛЕНО: 15 (int) замість 0.15
-    'wm_opacity_key': 1.0,
-    'wm_margin_key': 15,
-    'wm_angle_key': 0
+    'wm_scale_key': 15,
+    'wm_opacity_key': 0.3, # Новий дефолт
+    'wm_margin_key': 30,   # Новий дефолт
+    'wm_angle_key': 45     # Новий дефолт
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
 with st.sidebar:
-    lang_choice = st.selectbox("Language / Мова", ["Українська", "English"])
-    lang_code = "ua" if lang_choice == "Українська" else "en"
+    # 1. Визначаємо мову з State (для відображення UI)
+    lang_code = st.session_state['lang_code']
     T = TRANSLATIONS[lang_code]
-    
-    st.divider()
-    
-    # Кнопка скидання (верх сайдбару)
-    if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True):
-        pass 
     
     st.header(T['sb_config'])
     
+    # 2. Основні налаштування
     with st.expander(T['sec_file'], expanded=False):
         out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"])
         quality = 80
@@ -143,16 +141,11 @@ with st.sidebar:
 
     with st.expander(T['sec_wm'], expanded=True):
         wm_file = st.file_uploader(T['lbl_wm_upload'], type=["png"])
-        
-        # Позиція
         wm_pos = st.selectbox(T['lbl_wm_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
         
-        # Масштаб і Прозорість
-        # Тепер слайдер працює з цілим числом 15, а ділимо на 100 ми вже тут
         wm_scale = st.slider(T['lbl_wm_scale'], 5, 50, key='wm_scale_key') / 100
         wm_opacity = st.slider(T['lbl_wm_opacity'], 0.1, 1.0, key='wm_opacity_key')
         
-        # ЛОГІКА ВІДОБРАЖЕННЯ
         if wm_pos == 'tiled':
             wm_angle = st.slider(T['lbl_wm_angle'], -180, 180, key='wm_angle_key')
             wm_margin = st.slider(T['lbl_wm_margin_gap'], 0, 200, key='wm_margin_key')
@@ -161,8 +154,25 @@ with st.sidebar:
             wm_margin = st.slider(T['lbl_wm_margin_edge'], 0, 100, key='wm_margin_key')
 
     st.divider()
+    
+    # 3. Кнопка скидання (Перенесена вниз)
+    if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True):
+        pass
+
+    # 4. About
     with st.expander("ℹ️ About"):
         st.markdown(T['about_prod']); st.markdown(T['about_auth']); st.markdown(T['about_lic']); st.markdown(T['about_repo']); st.caption(T['about_copy'])
+
+    # 5. Вибір мови (В самому низу)
+    st.divider()
+    # Логіка для оновлення мови і перезавантаження
+    current_idx = 0 if st.session_state['lang_code'] == 'ua' else 1
+    selected_lang = st.selectbox(T['lang_select'], ["Українська", "English"], index=current_idx)
+    new_code = "ua" if selected_lang == "Українська" else "en"
+    
+    if new_code != st.session_state['lang_code']:
+        st.session_state['lang_code'] = new_code
+        st.rerun()
 
 st.title(T['title'])
 c_left, c_right = st.columns([1.5, 1], gap="large")
