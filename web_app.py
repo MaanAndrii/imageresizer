@@ -14,7 +14,7 @@ st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="
 # ==========================================
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v4.1",
+        "title": "📸 Watermarker Pro v4.2",
         "lang_select": "Мова / Language",
         "sb_config": "🛠 Налаштування",
         "sec_file": "1. Файл та Ім'я",
@@ -22,15 +22,17 @@ TRANSLATIONS = {
         "sec_wm": "3. Вотермарка",
         "lbl_format": "Формат", "lbl_quality": "Якість", "lbl_naming": "Стратегія імен", "lbl_prefix": "Префікс",
         "chk_resize": "Змінювати розмір", "lbl_resize_mode": "Режим", "lbl_resize_val": "Розмір (px)", "lbl_presets": "Швидкі пресети:",
-        "lbl_wm_upload": "Завантажити лого (PNG)", "lbl_wm_pos": "Позиція", "lbl_wm_scale": "Масштаб (%)", "lbl_wm_opacity": "Прозорість", "lbl_wm_margin": "Відступ (px)",
+        "lbl_wm_upload": "Завантажити лого (PNG)", "lbl_wm_pos": "Позиція", 
+        "lbl_wm_scale": "Масштаб (%)", "lbl_wm_opacity": "Прозорість", 
+        "lbl_wm_margin": "Відступ / Проміжок (px)", "lbl_wm_angle": "Кут нахилу (°)",
         "files_header": "📂 Робоча область", "uploader_label": "Файли", "tbl_select": "✅", "tbl_name": "Файл",
         "btn_delete": "🗑️ Видалити", "btn_reset": "♻️ Скинути", "btn_process": "🚀 Обробити", "msg_done": "Готово!",
         "res_savings": "Економія", "btn_dl_zip": "📦 Скачати ZIP", "exp_report": "📊 Технічний звіт", "exp_dl_separate": "⬇️ Скачати окремо",
         "prev_header": "👁️ Живий перегляд", "prev_rendering": "Генерація...", "prev_size": "Розмір", "prev_weight": "Вага", "prev_info": "Оберіть файл (✅) для тесту.",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.1", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.2", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
     },
     "en": {
-        "title": "📸 Watermarker Pro v4.1",
+        "title": "📸 Watermarker Pro v4.2",
         "lang_select": "Language / Мова",
         "sb_config": "🛠 Configuration",
         "sec_file": "1. File & Naming",
@@ -38,12 +40,14 @@ TRANSLATIONS = {
         "sec_wm": "3. Watermark",
         "lbl_format": "Output Format", "lbl_quality": "Quality", "lbl_naming": "Naming Strategy", "lbl_prefix": "Filename Prefix",
         "chk_resize": "Enable Resize", "lbl_resize_mode": "Mode", "lbl_resize_val": "Size (px)", "lbl_presets": "Quick Presets:",
-        "lbl_wm_upload": "Upload Logo (PNG)", "lbl_wm_pos": "Position", "lbl_wm_scale": "Scale (%)", "lbl_wm_opacity": "Opacity", "lbl_wm_margin": "Margin (px)",
+        "lbl_wm_upload": "Upload Logo (PNG)", "lbl_wm_pos": "Position", 
+        "lbl_wm_scale": "Scale (%)", "lbl_wm_opacity": "Opacity", 
+        "lbl_wm_margin": "Margin / Gap (px)", "lbl_wm_angle": "Angle (°)",
         "files_header": "📂 Workspace", "uploader_label": "Files", "tbl_select": "✅", "tbl_name": "File",
         "btn_delete": "🗑️ Delete", "btn_reset": "♻️ Reset", "btn_process": "🚀 Process", "msg_done": "Done!",
         "res_savings": "Savings", "btn_dl_zip": "📦 Download ZIP", "exp_report": "📊 Technical Report", "exp_dl_separate": "⬇️ Download Separate",
         "prev_header": "👁️ Live Preview", "prev_rendering": "Rendering...", "prev_size": "Dimensions", "prev_weight": "Weight", "prev_info": "Select a file (✅) to preview.",
-        "about_prod": "**Product:** Watermarker Pro MaAn v4.1", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
+        "about_prod": "**Product:** Watermarker Pro MaAn v4.2", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
     }
 }
 
@@ -51,7 +55,6 @@ OPTIONS_MAP = {
     "ua": {
         "Keep Original": "Зберегти назву", "Prefix + Sequence": "Префікс + Номер (001)", "Timestamp": "Таймстемп", "Original + Suffix": "Оригінал + Суфікс", "Content Hash": "Хеш контенту",
         "Max Side": "Макс. сторона", "Exact Width": "Точна ширина", "Exact Height": "Точна висота",
-        # ДОДАНО 'tiled'
         "bottom-right": "Знизу-праворуч", "bottom-left": "Знизу-ліворуч", "top-right": "Зверху-праворуч", "top-left": "Зверху-ліворуч", "center": "Центр", "tiled": "Замощення (Паттерн)"
     },
     "en": {
@@ -101,11 +104,13 @@ with st.sidebar:
 
     with st.expander(T['sec_wm'], expanded=True):
         wm_file = st.file_uploader(T['lbl_wm_upload'], type=["png"])
-        # ДОДАНО 'tiled' у список опцій
         wm_pos = st.selectbox(T['lbl_wm_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
         wm_scale = st.slider(T['lbl_wm_scale'], 5, 50, 15) / 100
         wm_opacity = st.slider(T['lbl_wm_opacity'], 0.1, 1.0, 1.0, 0.1)
-        wm_margin = st.slider(T['lbl_wm_margin'], 0, 100, 15)
+        
+        # --- НОВІ ПАРАМЕТРИ ДЛЯ ЗАМОЩЕННЯ ---
+        wm_angle = st.slider(T['lbl_wm_angle'], -180, 180, 0, 5) # Кут
+        wm_margin = st.slider(T['lbl_wm_margin'], 0, 200, 50) # Відступ/Гап
         
     st.divider()
     with st.expander("ℹ️ About"):
@@ -151,7 +156,13 @@ with c_left:
                 
                 wm_bytes = wm_file.getvalue() if wm_file else None
                 wm_cached_obj = ui_load_watermark(wm_bytes, wm_opacity)
-                resize_cfg = {'enabled': resize_on, 'mode': resize_mode, 'value': resize_val, 'wm_scale': wm_scale, 'wm_margin': wm_margin, 'wm_position': wm_pos}
+                
+                # Передаємо wm_angle та wm_margin (як gap)
+                resize_cfg = {
+                    'enabled': resize_on, 'mode': resize_mode, 'value': resize_val, 
+                    'wm_scale': wm_scale, 'wm_margin': wm_margin, 
+                    'wm_position': wm_pos, 'wm_angle': wm_angle
+                }
                 
                 results_list = []
                 report_list = []
@@ -177,7 +188,6 @@ with c_left:
                             except Exception as e: st.error(f"Error: {e}")
                             progress_bar.progress((i + 1) / total_files)
 
-                # ТУТ ЗМІНЕНО: Використовуємо st.toast замість status.success
                 st.toast(T['msg_done'], icon='🎉')
                 st.session_state['results'] = {'zip': zip_buffer.getvalue(), 'files': results_list, 'report': report_list}
 
@@ -210,7 +220,13 @@ with c_right:
             raw_bytes = files_map[preview_target]
             wm_bytes = wm_file.getvalue() if wm_file else None
             wm_obj = ui_load_watermark(wm_bytes, wm_opacity)
-            resize_cfg = {'enabled': resize_on, 'mode': resize_mode, 'value': resize_val, 'wm_scale': wm_scale, 'wm_margin': wm_margin, 'wm_position': wm_pos}
+            
+            # Та сама конфігурація з кутом
+            resize_cfg = {
+                'enabled': resize_on, 'mode': resize_mode, 'value': resize_val, 
+                'wm_scale': wm_scale, 'wm_margin': wm_margin, 
+                'wm_position': wm_pos, 'wm_angle': wm_angle
+            }
             try:
                 with st.spinner(T['prev_rendering']):
                     preview_name = engine.generate_filename(preview_target, naming_mode, prefix, out_fmt.lower(), index=1, file_bytes=raw_bytes)
