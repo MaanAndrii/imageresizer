@@ -89,7 +89,8 @@ def ui_load_watermark(wm_bytes, opacity): return engine.load_and_process_waterma
 def reset_settings():
     """Скидає налаштування до заводських значень."""
     st.session_state['resize_val_state'] = 1920
-    st.session_state['wm_scale_key'] = 0.15
+    # ВИПРАВЛЕНО: тут має бути 15 (ціле число), а не 0.15
+    st.session_state['wm_scale_key'] = 15 
     st.session_state['wm_opacity_key'] = 1.0
     st.session_state['wm_margin_key'] = 15
     st.session_state['wm_angle_key'] = 0
@@ -98,10 +99,10 @@ def reset_settings():
 if 'file_cache' not in st.session_state: st.session_state['file_cache'] = {}
 if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
 
-# Ініціалізація значень за замовчуванням (якщо їх ще немає)
+# Ініціалізація значень за замовчуванням
 defaults = {
     'resize_val_state': 1920,
-    'wm_scale_key': 0.15,
+    'wm_scale_key': 15, # ВИПРАВЛЕНО: 15 (int) замість 0.15
     'wm_opacity_key': 1.0,
     'wm_margin_key': 15,
     'wm_angle_key': 0
@@ -118,7 +119,7 @@ with st.sidebar:
     
     # Кнопка скидання (верх сайдбару)
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True):
-        pass # Дія виконується в колбеку
+        pass 
     
     st.header(T['sb_config'])
     
@@ -138,7 +139,6 @@ with st.sidebar:
         with col_p1: st.button("HD", on_click=set_res, args=(1280,), disabled=not resize_on, use_container_width=True)
         with col_p2: st.button("FHD", on_click=set_res, args=(1920,), disabled=not resize_on, use_container_width=True)
         with col_p3: st.button("4K", on_click=set_res, args=(3840,), disabled=not resize_on, use_container_width=True)
-        # Прив'язка до ключа resize_val_state
         resize_val = st.number_input(T['lbl_resize_val'], min_value=100, max_value=8000, step=100, key='resize_val_state', disabled=not resize_on)
 
     with st.expander(T['sec_wm'], expanded=True):
@@ -147,17 +147,16 @@ with st.sidebar:
         # Позиція
         wm_pos = st.selectbox(T['lbl_wm_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
         
-        # Масштаб і Прозорість (завжди є)
+        # Масштаб і Прозорість
+        # Тепер слайдер працює з цілим числом 15, а ділимо на 100 ми вже тут
         wm_scale = st.slider(T['lbl_wm_scale'], 5, 50, key='wm_scale_key') / 100
         wm_opacity = st.slider(T['lbl_wm_opacity'], 0.1, 1.0, key='wm_opacity_key')
         
-        # ЛОГІКА ВІДОБРАЖЕННЯ (Dynamic UI)
+        # ЛОГІКА ВІДОБРАЖЕННЯ
         if wm_pos == 'tiled':
-            # Для замощення показуємо Кут і Відступ (як Gap)
             wm_angle = st.slider(T['lbl_wm_angle'], -180, 180, key='wm_angle_key')
             wm_margin = st.slider(T['lbl_wm_margin_gap'], 0, 200, key='wm_margin_key')
         else:
-            # Для звичайного режиму - тільки Відступ (як Margin) і ховаємо кут (передаємо 0)
             wm_angle = 0
             wm_margin = st.slider(T['lbl_wm_margin_edge'], 0, 100, key='wm_margin_key')
 
@@ -206,7 +205,6 @@ with c_left:
                 wm_bytes = wm_file.getvalue() if wm_file else None
                 wm_cached_obj = ui_load_watermark(wm_bytes, wm_opacity)
                 
-                # Параметри передаються так само, але angle буде 0 для незамощення
                 resize_cfg = {
                     'enabled': resize_on, 'mode': resize_mode, 'value': resize_val, 
                     'wm_scale': wm_scale, 'wm_margin': wm_margin, 
