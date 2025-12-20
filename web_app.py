@@ -17,7 +17,9 @@ st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="
 
 def generate_filename(original_name, naming_mode="Timestamp", prefix="", extension="jpg", file_bytes=None):
     """Генерує стабільне або унікальне ім'я файлу."""
-    name_only = os.path.splitext(original_filename)[0]
+    # ВИПРАВЛЕННЯ: Використовуємо правильну назву змінної original_name
+    name_only = os.path.splitext(original_name)[0]
+    
     slug = re.sub(r'[\s\W_]+', '-', translit(name_only).lower()).strip('-')
     if not slug: slug = "image"
     
@@ -53,9 +55,11 @@ def load_and_process_watermark(wm_file_bytes, opacity):
     
     # Корекція прозорості
     if opacity < 1.0:
+        # Отримуємо альфа-канал
         alpha = wm.split()[3]
-        # Зменшуємо яскравість альфа-каналу, що робить зображення прозорішим
+        # Змінюємо його яскравість (це і є прозорість для альфа-каналу)
         alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+        # Вставляємо назад
         wm.putalpha(alpha)
         
     return wm
@@ -111,8 +115,12 @@ def process_image_core(file_bytes, filename, wm_obj, resize_config, output_fmt, 
         
         # Розрахунок розміру лого
         wm_w_target = int(new_w * scale)
+        # Захист від ділення на нуль або мікро-розмірів
+        if wm_w_target < 1: wm_w_target = 1
+        
         w_ratio = wm_w_target / float(wm_obj.width)
         wm_h_target = int(float(wm_obj.height) * w_ratio)
+        if wm_h_target < 1: wm_h_target = 1
         
         # Ресайз лого (LANCZOS для чіткості)
         wm_resized = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
@@ -125,7 +133,7 @@ def process_image_core(file_bytes, filename, wm_obj, resize_config, output_fmt, 
         elif position == 'top-left': pos_x, pos_y = margin, margin
         elif position == 'center': pos_x, pos_y = (new_w - wm_w_target) // 2, (new_h - wm_h_target) // 2
         
-        # Накладання
+        # Накладання (використовуємо paste з маскою самого зображення для альфи)
         img.paste(wm_resized, (pos_x, pos_y), wm_resized)
 
     # 4. Експорт
@@ -407,3 +415,12 @@ with c_right:
         else:
             st.info("Виберіть файл зліва (✅), щоб побачити результат.")
             st.markdown('<div style="height:300px; background:#f0f2f6;"></div>', unsafe_allow_html=True)
+
+    # === ABOUT ===
+    st.divider()
+    with st.expander("ℹ️ About"):
+        st.markdown("**Product:** Watermarker Pro MaAn v3.0")
+        st.markdown("**Author:** Marynyuk Andriy")
+        st.markdown("**License:** Proprietary")
+        st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
+        st.caption("© 2025 All rights reserved")
