@@ -99,18 +99,8 @@ def process_single_image(uploaded_file, wm_image, max_dim, quality, wm_settings,
 
 # --- ІНТЕРФЕЙС ---
 
-col_head1, col_head2 = st.columns([3, 1], vertical_alignment="bottom")
-with col_head1:
-    st.title("📸 Watermarker Pro MaAn")
-with col_head2:
-    # === ВИПРАВЛЕНО: ПОВЕРНУТО ВСІ ДАНІ ===
-    with st.expander("ℹ️ About"):
-        st.markdown("**Product:** Watermarker Pro MaAn")
-        st.markdown("**Author:** Marynyuk Andriy")
-        st.markdown("**License:** Proprietary")
-        st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
-        st.caption("© 2025 All rights reserved")
-
+# ЗМІНА: Просто заголовок, без About справа
+st.title("📸 Watermarker Pro MaAn")
 st.markdown("---")
 
 # НАЛАШТУВАННЯ
@@ -313,3 +303,12 @@ with col_right:
         else:
             st.info("Завантажте файли зліва.")
             st.markdown('<div style="height:200px; display:flex; align-items:center; justify-content:center; color:#ccc;">Немає файлів</div>', unsafe_allow_html=True)
+
+    # === НОВЕ РОЗМІЩЕННЯ ABOUT ===
+    st.divider()
+    with st.expander("ℹ️ About"):
+        st.markdown("**Product:** Watermarker Pro MaAn")
+        st.markdown("**Author:** Marynyuk Andriy")
+        st.markdown("**License:** Proprietary")
+        st.markdown("[GitHub Repository](https://github.com/MaanAndrii)")
+        st.caption("© 2025 All rights reserved")
