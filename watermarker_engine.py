@@ -8,12 +8,25 @@ from PIL import Image, ImageEnhance
 from translitua import translit
 
 """
-Watermarker Pro Engine v4.2
+Watermarker Pro Engine v4.7
 ---------------------------
-Added: 
-- Rotation support (Angle).
-- Advanced Tiling algorithm (creates a separate layer).
+Fixed: 
+- Advanced diagonal tiling algorithm with proper offset
+- Separate margin parameter for edge vs gap
+- Rotation support for all modes
+- Better validation and error handling
+- Fixed docstrings encoding
 """
+
+# === CONFIG ===
+DEFAULT_CONFIG = {
+    'wm_scale': 0.15,
+    'wm_opacity': 1.0,
+    'wm_margin': 15,
+    'wm_gap': 30,
+    'wm_angle': 0,
+    'wm_position': 'bottom-right'
+}
 
 def generate_filename(original_name: str, naming_mode: str, prefix: str = "", extension: str = "jpg", index: int = 1, file_bytes: bytes = None) -> str:
     """Генерує безпечне та унікальне ім'я файлу."""
@@ -42,31 +55,42 @@ def generate_filename(original_name: str, naming_mode: str, prefix: str = "", ex
 
 
 def get_image_metadata(file_bytes: bytes) -> tuple:
-    """Отримує метадані зображення."""
+    """Отримує метадані зображення з валідацією."""
     try:
         with Image.open(io.BytesIO(file_bytes)) as img:
+            # Валідація розміру
+            if img.width == 0 or img.height == 0:
+                raise ValueError("Invalid image dimensions")
             return img.width, img.height, len(file_bytes), img.format
-    except Exception:
-        return 0, 0, len(file_bytes), "UNKNOWN"
+    except Exception as e:
+        # Повертаємо None для формату як індикатор помилки
+        return 0, 0, len(file_bytes), None
 
 
 def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Image:
-    """Завантажує та готує зображення водяного знака."""
+    """Завантажує та готує зображення водяного знаку."""
     if not wm_file_bytes:
         return None
     
-    wm = Image.open(io.BytesIO(wm_file_bytes)).convert("RGBA")
-    
-    if opacity < 1.0:
-        alpha = wm.split()[3]
-        alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
-        wm.putalpha(alpha)
+    try:
+        wm = Image.open(io.BytesIO(wm_file_bytes)).convert("RGBA")
         
-    return wm
+        # Валідація мінімального розміру
+        if wm.width < 10 or wm.height < 10:
+            raise ValueError("Watermark too small (min 10x10px)")
+        
+        if opacity < 1.0:
+            alpha = wm.split()[3]
+            alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+            wm.putalpha(alpha)
+            
+        return wm
+    except Exception as e:
+        raise ValueError(f"Failed to load watermark: {str(e)}")
 
 
 def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int) -> tuple:
-    """Основна функція обробки зображення."""
+    """Основна функція обробки зображення з виправленим tiling."""
     input_io = io.BytesIO(file_bytes)
     img = Image.open(input_io)
     
@@ -103,10 +127,13 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
 
     # --- WATERMARK LOGIC ---
     if wm_obj:
-        scale = resize_config.get('wm_scale', 0.15)
-        margin = resize_config.get('wm_margin', 50) # Відступ або проміжок
-        position = resize_config.get('wm_position', 'bottom-right')
-        angle = resize_config.get('wm_angle', 0)
+        scale = resize_config.get('wm_scale', DEFAULT_CONFIG['wm_scale'])
+        position = resize_config.get('wm_position', DEFAULT_CONFIG['wm_position'])
+        angle = resize_config.get('wm_angle', DEFAULT_CONFIG['wm_angle'])
+        
+        # Валідація scale
+        if scale > 0.8:
+            scale = 0.8  # Обмежуємо максимум 80%
         
         # 1. Базовий ресайз вотермарки
         wm_w_target = int(new_w * scale)
@@ -118,8 +145,7 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
         
         wm_resized = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
 
-        # 2. Поворот вотермарки (для обох режимів)
-        # expand=True важливо, щоб при повороті кути не обрізались
+        # 2. Поворот вотермарки (для всіх режимів)
         if angle != 0:
             wm_resized = wm_resized.rotate(angle, expand=True, resample=Image.BICUBIC)
 
@@ -127,29 +153,41 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
 
         # 3. Накладання
         if position == 'tiled':
-            # === TILING ALGORITHM ===
-            # Створюємо прозорий шар розміром з картинку
+            # === FIXED DIAGONAL TILING ALGORITHM ===
+            gap = resize_config.get('wm_gap', DEFAULT_CONFIG['wm_gap'])
+            
+            # Створюємо прозорий шар
             overlay = Image.new('RGBA', (new_w, new_h), (0, 0, 0, 0))
             
-            # Визначаємо крок (розмір лого + відступ)
-            step_x = wm_w_final + margin
-            step_y = wm_h_final + margin
+            # Визначаємо кроки з gap
+            step_x = wm_w_final + gap
+            step_y = wm_h_final + gap
             
-            # Якщо лого дуже велике або margin великий, щоб не було вічного циклу
-            if step_x < 1: step_x = 1
-            if step_y < 1: step_y = 1
-
-            # Цикл по всій площині
-            # Починаємо з 0, йдемо до кінця
-            for y in range(0, new_h, step_y):
-                for x in range(0, new_w, step_x):
-                    overlay.paste(wm_resized, (x, y), wm_resized)
+            # Захист від нескінченного циклу
+            if step_x < 10: step_x = 10
+            if step_y < 10: step_y = 10
             
-            # Накладаємо шар з патерном на основне фото
+            # Діагональне замощення з offset
+            # Починаємо з від'ємних координат, щоб покрити всю площину
+            rows_needed = (new_h // step_y) + 3  # +3 для перекриття країв
+            cols_needed = (new_w // step_x) + 3
+            
+            for row in range(-1, rows_needed):
+                for col in range(-1, cols_needed):
+                    # Діагональний зсув: кожен наступний ряд зміщується на половину кроку
+                    x = col * step_x + (row * step_x // 2)
+                    y = row * step_y
+                    
+                    # Пастимо тільки якщо хоч частково попадає в межі
+                    if x + wm_w_final > 0 and x < new_w and y + wm_h_final > 0 and y < new_h:
+                        overlay.paste(wm_resized, (x, y), wm_resized)
+            
+            # Накладаємо шар з паттерном на основне фото
             img = Image.alpha_composite(img, overlay)
                 
         else:
             # === SINGLE POSITION ALGORITHM ===
+            margin = resize_config.get('wm_margin', DEFAULT_CONFIG['wm_margin'])
             pos_x, pos_y = 0, 0
             
             if position == 'bottom-right': 
@@ -163,8 +201,10 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
             elif position == 'center': 
                 pos_x, pos_y = (new_w - wm_w_final) // 2, (new_h - wm_h_final) // 2
             
-            # Накладаємо один раз
-            # Перевірка на вихід за межі (хоча paste дозволяє від'ємні)
+            # Обмеження координат в межах картинки
+            pos_x = max(0, min(pos_x, new_w - wm_w_final))
+            pos_y = max(0, min(pos_y, new_h - wm_h_final))
+            
             img.paste(wm_resized, (pos_x, pos_y), wm_resized)
 
     # --- EXPORT ---
