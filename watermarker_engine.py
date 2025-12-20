@@ -2,20 +2,17 @@ import io
 import os
 import re
 import hashlib
-import math
 from datetime import datetime
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 from translitua import translit
 
 """
-Watermarker Pro Engine v4.7
+Watermarker Pro Engine v4.8
 ---------------------------
-Fixed: 
-- Advanced diagonal tiling algorithm with proper offset
-- Separate margin parameter for edge vs gap
-- Rotation support for all modes
-- Better validation and error handling
-- Fixed docstrings encoding
+New Features:
+- Text Watermark generation
+- EXIF metadata preservation
+- Improved validation
 """
 
 # === CONFIG ===
@@ -55,27 +52,77 @@ def generate_filename(original_name: str, naming_mode: str, prefix: str = "", ex
 
 
 def get_image_metadata(file_bytes: bytes) -> tuple:
-    """Отримує метадані зображення з валідацією."""
     try:
         with Image.open(io.BytesIO(file_bytes)) as img:
-            # Валідація розміру
             if img.width == 0 or img.height == 0:
                 raise ValueError("Invalid image dimensions")
             return img.width, img.height, len(file_bytes), img.format
     except Exception as e:
-        # Повертаємо None для формату як індикатор помилки
         return 0, 0, len(file_bytes), None
 
 
-def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Image:
-    """Завантажує та готує зображення водяного знаку."""
-    if not wm_file_bytes:
+def create_text_watermark(text: str, font_size: int = 50, color_hex: str = "#FFFFFF", opacity: float = 1.0) -> Image.Image:
+    """Генерує зображення з тексту для використання як вотермарки."""
+    # Створюємо тимчасовий канвас для розрахунку розміру тексту
+    dummy_img = Image.new('RGBA', (10, 10), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(dummy_img)
+    
+    # Спроба завантажити шрифт (Linux/Windows сумісність)
+    try:
+        # Спробуємо стандартні шрифти, якщо ні - дефолтний
+        try:
+            font = ImageFont.truetype("arial.ttf", font_size)
+        except IOError:
+            try:
+                font = ImageFont.truetype("DejaVuSans.ttf", font_size) # Linux/Streamlit Cloud
+            except IOError:
+                font = ImageFont.load_default()
+                # Дефолтний шрифт не масштабується, тому це fallback
+    except Exception:
+        font = ImageFont.load_default()
+
+    # Розрахунок розмірів тексту
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    
+    # Створюємо фінальне зображення (+ padding щоб не обрізало краї)
+    wm = Image.new('RGBA', (text_w + 20, text_h + 20), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(wm)
+    
+    # Конвертуємо HEX колір в RGB
+    color_hex = color_hex.lstrip('#')
+    rgb = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
+    
+    # Малюємо текст
+    draw.text((10, 10), text, font=font, fill=rgb + (255,))
+    
+    # Застосовуємо прозорість
+    if opacity < 1.0:
+        alpha = wm.split()[3]
+        alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+        wm.putalpha(alpha)
+        
+    return wm
+
+
+def load_and_process_watermark(wm_source, opacity: float, is_text: bool = False, text_params: dict = None) -> Image.Image:
+    """Універсальний завантажувач вотермарки (Файл або Текст)."""
+    
+    if is_text and text_params:
+        return create_text_watermark(
+            text_params['text'], 
+            text_params.get('size', 50),
+            text_params.get('color', '#FFFFFF'),
+            opacity
+        )
+    
+    # Якщо це файл (bytes)
+    if not wm_source:
         return None
     
     try:
-        wm = Image.open(io.BytesIO(wm_file_bytes)).convert("RGBA")
-        
-        # Валідація мінімального розміру
+        wm = Image.open(io.BytesIO(wm_source)).convert("RGBA")
         if wm.width < 10 or wm.height < 10:
             raise ValueError("Watermark too small (min 10x10px)")
         
@@ -89,14 +136,18 @@ def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Im
         raise ValueError(f"Failed to load watermark: {str(e)}")
 
 
-def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int) -> tuple:
-    """Основна функція обробки зображення з виправленим tiling."""
+def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int, keep_exif: bool = False) -> tuple:
+    """Основна функція обробки з підтримкою EXIF."""
     input_io = io.BytesIO(file_bytes)
     img = Image.open(input_io)
+    
+    # Зберігаємо EXIF якщо треба
+    exif_data = img.info.get('exif') if keep_exif else None
     
     orig_w, orig_h = img.size
     orig_format = img.format
     
+    # Конвертуємо для обробки, але пам'ятаємо режим
     img = img.convert("RGBA")
     
     # --- RESIZE LOGIC ---
@@ -131,11 +182,9 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
         position = resize_config.get('wm_position', DEFAULT_CONFIG['wm_position'])
         angle = resize_config.get('wm_angle', DEFAULT_CONFIG['wm_angle'])
         
-        # Валідація scale
-        if scale > 0.8:
-            scale = 0.8  # Обмежуємо максимум 80%
+        # Ресайз вотермарки
+        if scale > 0.9: scale = 0.9 # Hard limit
         
-        # 1. Базовий ресайз вотермарки
         wm_w_target = int(new_w * scale)
         if wm_w_target < 1: wm_w_target = 1
         
@@ -145,48 +194,33 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
         
         wm_resized = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
 
-        # 2. Поворот вотермарки (для всіх режимів)
         if angle != 0:
             wm_resized = wm_resized.rotate(angle, expand=True, resample=Image.BICUBIC)
 
         wm_w_final, wm_h_final = wm_resized.size
 
-        # 3. Накладання
+        # Накладання
         if position == 'tiled':
-            # === FIXED DIAGONAL TILING ALGORITHM ===
             gap = resize_config.get('wm_gap', DEFAULT_CONFIG['wm_gap'])
-            
-            # Створюємо прозорий шар
             overlay = Image.new('RGBA', (new_w, new_h), (0, 0, 0, 0))
             
-            # Визначаємо кроки з gap
             step_x = wm_w_final + gap
             step_y = wm_h_final + gap
-            
-            # Захист від нескінченного циклу
             if step_x < 10: step_x = 10
             if step_y < 10: step_y = 10
             
-            # Діагональне замощення з offset
-            # Починаємо з від'ємних координат, щоб покрити всю площину
-            rows_needed = (new_h // step_y) + 3  # +3 для перекриття країв
+            rows_needed = (new_h // step_y) + 3
             cols_needed = (new_w // step_x) + 3
             
             for row in range(-1, rows_needed):
                 for col in range(-1, cols_needed):
-                    # Діагональний зсув: кожен наступний ряд зміщується на половину кроку
                     x = col * step_x + (row * step_x // 2)
                     y = row * step_y
-                    
-                    # Пастимо тільки якщо хоч частково попадає в межі
                     if x + wm_w_final > 0 and x < new_w and y + wm_h_final > 0 and y < new_h:
                         overlay.paste(wm_resized, (x, y), wm_resized)
             
-            # Накладаємо шар з паттерном на основне фото
             img = Image.alpha_composite(img, overlay)
-                
         else:
-            # === SINGLE POSITION ALGORITHM ===
             margin = resize_config.get('wm_margin', DEFAULT_CONFIG['wm_margin'])
             pos_x, pos_y = 0, 0
             
@@ -201,7 +235,6 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
             elif position == 'center': 
                 pos_x, pos_y = (new_w - wm_w_final) // 2, (new_h - wm_h_final) // 2
             
-            # Обмеження координат в межах картинки
             pos_x = max(0, min(pos_x, new_w - wm_w_final))
             pos_y = max(0, min(pos_y, new_h - wm_h_final))
             
@@ -217,12 +250,16 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
 
     output_buffer = io.BytesIO()
     
+    save_kwargs = {}
+    if keep_exif and exif_data:
+        save_kwargs['exif'] = exif_data
+
     if output_fmt == "JPEG":
-        img.save(output_buffer, format="JPEG", quality=quality, optimize=True, subsampling=0)
+        img.save(output_buffer, format="JPEG", quality=quality, optimize=True, subsampling=0, **save_kwargs)
     elif output_fmt == "WEBP":
-        img.save(output_buffer, format="WEBP", quality=quality, method=6)
+        img.save(output_buffer, format="WEBP", quality=quality, method=6, **save_kwargs)
     elif output_fmt == "PNG":
-        img.save(output_buffer, format="PNG", optimize=True)
+        img.save(output_buffer, format="PNG", optimize=True, **save_kwargs)
 
     result_bytes = output_buffer.getvalue()
     
