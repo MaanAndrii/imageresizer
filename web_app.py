@@ -4,19 +4,17 @@ import io
 import zipfile
 import concurrent.futures
 from datetime import datetime
-
-# Імпорт нашого нового модуля
 import watermarker_engine as engine
 
 # --- КОНФІГУРАЦІЯ ---
 st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
 
 # ==========================================
-# 🌐 ЛОКАЛІЗАЦІЯ (Без змін)
+# 🌐 ЛОКАЛІЗАЦІЯ
 # ==========================================
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v4.0 (Modular)",
+        "title": "📸 Watermarker Pro v4.1",
         "lang_select": "Мова / Language",
         "sb_config": "🛠 Налаштування",
         "sec_file": "1. Файл та Ім'я",
@@ -29,10 +27,10 @@ TRANSLATIONS = {
         "btn_delete": "🗑️ Видалити", "btn_reset": "♻️ Скинути", "btn_process": "🚀 Обробити", "msg_done": "Готово!",
         "res_savings": "Економія", "btn_dl_zip": "📦 Скачати ZIP", "exp_report": "📊 Технічний звіт", "exp_dl_separate": "⬇️ Скачати окремо",
         "prev_header": "👁️ Живий перегляд", "prev_rendering": "Генерація...", "prev_size": "Розмір", "prev_weight": "Вага", "prev_info": "Оберіть файл (✅) для тесту.",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.0", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.1", "about_auth": "**Автор:** Marynyuk Andriy", "about_lic": "**Ліцензія:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 Всі права захищено"
     },
     "en": {
-        "title": "📸 Watermarker Pro v4.0 (Modular)",
+        "title": "📸 Watermarker Pro v4.1",
         "lang_select": "Language / Мова",
         "sb_config": "🛠 Configuration",
         "sec_file": "1. File & Naming",
@@ -45,7 +43,7 @@ TRANSLATIONS = {
         "btn_delete": "🗑️ Delete", "btn_reset": "♻️ Reset", "btn_process": "🚀 Process", "msg_done": "Done!",
         "res_savings": "Savings", "btn_dl_zip": "📦 Download ZIP", "exp_report": "📊 Technical Report", "exp_dl_separate": "⬇️ Download Separate",
         "prev_header": "👁️ Live Preview", "prev_rendering": "Rendering...", "prev_size": "Dimensions", "prev_weight": "Weight", "prev_info": "Select a file (✅) to preview.",
-        "about_prod": "**Product:** Watermarker Pro MaAn v4.0", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
+        "about_prod": "**Product:** Watermarker Pro MaAn v4.1", "about_auth": "**Author:** Marynyuk Andriy", "about_lic": "**License:** Proprietary", "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", "about_copy": "© 2025 All rights reserved"
     }
 }
 
@@ -53,38 +51,28 @@ OPTIONS_MAP = {
     "ua": {
         "Keep Original": "Зберегти назву", "Prefix + Sequence": "Префікс + Номер (001)", "Timestamp": "Таймстемп", "Original + Suffix": "Оригінал + Суфікс", "Content Hash": "Хеш контенту",
         "Max Side": "Макс. сторона", "Exact Width": "Точна ширина", "Exact Height": "Точна висота",
-        "bottom-right": "Знизу-праворуч", "bottom-left": "Знизу-ліворуч", "top-right": "Зверху-праворуч", "top-left": "Зверху-ліворуч", "center": "Центр"
+        # ДОДАНО 'tiled'
+        "bottom-right": "Знизу-праворуч", "bottom-left": "Знизу-ліворуч", "top-right": "Зверху-праворуч", "top-left": "Зверху-ліворуч", "center": "Центр", "tiled": "Замощення (Паттерн)"
     },
     "en": {
         "Keep Original": "Keep Original", "Prefix + Sequence": "Prefix + Sequence (001)", "Timestamp": "Timestamp", "Original + Suffix": "Original + Suffix", "Content Hash": "Content Hash",
         "Max Side": "Max Side", "Exact Width": "Exact Width", "Exact Height": "Exact Height",
-        "bottom-right": "Bottom-Right", "bottom-left": "Bottom-Left", "top-right": "Top-Right", "top-left": "Top-Left", "center": "Center"
+        "bottom-right": "Bottom-Right", "bottom-left": "Bottom-Left", "top-right": "Top-Right", "top-left": "Top-Left", "center": "Center", "tiled": "Tiled (Pattern)"
     }
 }
 
-# ==========================================
-# 🔌 PROXY FUNCTIONS (UI-Layer Caching)
-# ==========================================
-# Тут ми "обгортаємо" чистий backend у кеш Streamlit
-
+# --- PROXY FUNCTIONS ---
 @st.cache_data(show_spinner=False)
-def ui_get_metadata(file_bytes):
-    return engine.get_image_metadata(file_bytes)
+def ui_get_metadata(file_bytes): return engine.get_image_metadata(file_bytes)
 
 @st.cache_resource(show_spinner=False)
-def ui_load_watermark(wm_bytes, opacity):
-    return engine.load_and_process_watermark(wm_bytes, opacity)
+def ui_load_watermark(wm_bytes, opacity): return engine.load_and_process_watermark(wm_bytes, opacity)
 
-# ==========================================
-# 🖥️ UI IMPLEMENTATION
-# ==========================================
-
-# Init State
+# --- UI IMPLEMENTATION ---
 if 'file_cache' not in st.session_state: st.session_state['file_cache'] = {}
 if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
 if 'resize_val_state' not in st.session_state: st.session_state['resize_val_state'] = 1920
 
-# Sidebar
 with st.sidebar:
     lang_choice = st.selectbox("Language / Мова", ["Українська", "English"])
     lang_code = "ua" if lang_choice == "Українська" else "en"
@@ -96,28 +84,25 @@ with st.sidebar:
     with st.expander(T['sec_file'], expanded=False):
         out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"])
         quality = 80
-        if out_fmt != "PNG":
-            quality = st.slider(T['lbl_quality'], 50, 100, 80, 5)
-        
+        if out_fmt != "PNG": quality = st.slider(T['lbl_quality'], 50, 100, 80, 5)
         naming_mode = st.selectbox(T['lbl_naming'], ["Keep Original", "Prefix + Sequence", "Timestamp", "Original + Suffix", "Content Hash"], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
         prefix = st.text_input(T['lbl_prefix'], placeholder="img")
 
     with st.expander(T['sec_geo'], expanded=True):
         resize_on = st.checkbox(T['chk_resize'], value=True)
         resize_mode = st.selectbox(T['lbl_resize_mode'], ["Max Side", "Exact Width", "Exact Height"], disabled=not resize_on, format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
-        
         st.write(T['lbl_presets'])
         col_p1, col_p2, col_p3 = st.columns(3)
         def set_res(val): st.session_state['resize_val_state'] = val
         with col_p1: st.button("HD", on_click=set_res, args=(1280,), disabled=not resize_on, use_container_width=True)
         with col_p2: st.button("FHD", on_click=set_res, args=(1920,), disabled=not resize_on, use_container_width=True)
         with col_p3: st.button("4K", on_click=set_res, args=(3840,), disabled=not resize_on, use_container_width=True)
-        
         resize_val = st.number_input(T['lbl_resize_val'], min_value=100, max_value=8000, step=100, key='resize_val_state', disabled=not resize_on)
 
     with st.expander(T['sec_wm'], expanded=True):
         wm_file = st.file_uploader(T['lbl_wm_upload'], type=["png"])
-        wm_pos = st.selectbox(T['lbl_wm_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center'], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
+        # ДОДАНО 'tiled' у список опцій
+        wm_pos = st.selectbox(T['lbl_wm_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], format_func=lambda x: OPTIONS_MAP[lang_code].get(x, x))
         wm_scale = st.slider(T['lbl_wm_scale'], 5, 50, 15) / 100
         wm_opacity = st.slider(T['lbl_wm_opacity'], 0.1, 1.0, 1.0, 0.1)
         wm_margin = st.slider(T['lbl_wm_margin'], 0, 100, 15)
@@ -126,18 +111,15 @@ with st.sidebar:
     with st.expander("ℹ️ About"):
         st.markdown(T['about_prod']); st.markdown(T['about_auth']); st.markdown(T['about_lic']); st.markdown(T['about_repo']); st.caption(T['about_copy'])
 
-# Main Area
 st.title(T['title'])
 c_left, c_right = st.columns([1.5, 1], gap="large")
 
 with c_left:
     st.subheader(T['files_header'])
     uploaded = st.file_uploader(T['uploader_label'], type=['png', 'jpg', 'jpeg', 'webp'], accept_multiple_files=True, label_visibility="collapsed", key=f"up_{st.session_state['uploader_key']}")
-    
     if uploaded:
         for f in uploaded:
-            if f.name not in st.session_state['file_cache']:
-                st.session_state['file_cache'][f.name] = f.getvalue()
+            if f.name not in st.session_state['file_cache']: st.session_state['file_cache'][f.name] = f.getvalue()
         st.session_state['uploader_key'] += 1
         st.rerun()
 
@@ -148,7 +130,6 @@ with c_left:
         table_data = []
         for fname in files_names:
             fbytes = files_map[fname]
-            # Використовуємо проксі-функцію з кешем
             w, h, size, fmt = ui_get_metadata(fbytes)
             table_data.append({"Select": False, "Name": fname, "Size": f"{size/1024:.1f} KB", "Res": f"{w}x{h}", "Fmt": fmt})
             
@@ -160,20 +141,16 @@ with c_left:
         act1, act2, act3 = st.columns([1, 1, 1.5])
         with act1:
             if st.button(T['btn_delete'], disabled=not selected_files, use_container_width=True):
-                for fn in selected_files: del st.session_state['file_cache'][fn]
-                st.rerun()
+                for fn in selected_files: del st.session_state['file_cache'][fn]; st.rerun()
         with act2:
             if st.button(T['btn_reset'], use_container_width=True):
                 st.session_state['file_cache'] = {}; st.session_state['results'] = None; st.rerun()
         with act3:
             if st.button(f"{T['btn_process']} ({len(files_names)})", type="primary", use_container_width=True):
                 progress_bar = st.progress(0)
-                status = st.empty()
                 
-                # Підготовка ресурсів
                 wm_bytes = wm_file.getvalue() if wm_file else None
                 wm_cached_obj = ui_load_watermark(wm_bytes, wm_opacity)
-                
                 resize_cfg = {'enabled': resize_on, 'mode': resize_mode, 'value': resize_val, 'wm_scale': wm_scale, 'wm_margin': wm_margin, 'wm_position': wm_pos}
                 
                 results_list = []
@@ -186,10 +163,7 @@ with c_left:
                     for i, fname in enumerate(files_names):
                         fbytes = files_map[fname]
                         ext = out_fmt.lower()
-                        # Виклик backend-функції для генерації імені
                         new_fname = engine.generate_filename(fname, naming_mode, prefix, ext, index=i+1, file_bytes=fbytes)
-                        
-                        # Виклик backend-функції обробки
                         future = executor.submit(engine.process_image, fbytes, new_fname, wm_cached_obj, resize_cfg, out_fmt, quality)
                         futures[future] = fname
 
@@ -203,7 +177,8 @@ with c_left:
                             except Exception as e: st.error(f"Error: {e}")
                             progress_bar.progress((i + 1) / total_files)
 
-                status.success(T['msg_done'])
+                # ТУТ ЗМІНЕНО: Використовуємо st.toast замість status.success
+                st.toast(T['msg_done'], icon='🎉')
                 st.session_state['results'] = {'zip': zip_buffer.getvalue(), 'files': results_list, 'report': report_list}
 
     if 'results' in st.session_state and st.session_state['results']:
