@@ -8,12 +8,14 @@ from PIL import Image, ImageEnhance
 from translitua import translit
 
 """
-Watermarker Pro Engine v4.8
+Watermarker Pro Engine v4.7
 ---------------------------
-Added:
-- Crop support with percentage-based coordinates
-- Improved error handling
-- Better validation
+Fixed: 
+- Advanced diagonal tiling algorithm with proper offset
+- Separate margin parameter for edge vs gap
+- Rotation support for all modes
+- Better validation and error handling
+- Fixed docstrings encoding
 """
 
 # === CONFIG ===
@@ -56,10 +58,12 @@ def get_image_metadata(file_bytes: bytes) -> tuple:
     """Отримує метадані зображення з валідацією."""
     try:
         with Image.open(io.BytesIO(file_bytes)) as img:
+            # Валідація розміру
             if img.width == 0 or img.height == 0:
                 raise ValueError("Invalid image dimensions")
             return img.width, img.height, len(file_bytes), img.format
     except Exception as e:
+        # Повертаємо None для формату як індикатор помилки
         return 0, 0, len(file_bytes), None
 
 
@@ -71,6 +75,7 @@ def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Im
     try:
         wm = Image.open(io.BytesIO(wm_file_bytes)).convert("RGBA")
         
+        # Валідація мінімального розміру
         if wm.width < 10 or wm.height < 10:
             raise ValueError("Watermark too small (min 10x10px)")
         
@@ -84,50 +89,8 @@ def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Im
         raise ValueError(f"Failed to load watermark: {str(e)}")
 
 
-def apply_crop(img: Image.Image, crop_config: dict) -> Image.Image:
-    """
-    Обрізає зображення на основі відсоткових координат.
-    
-    crop_config: {
-        'enabled': bool,
-        'x': int (0-100%),
-        'y': int (0-100%),
-        'w': int (10-100%),
-        'h': int (10-100%)
-    }
-    """
-    if not crop_config.get('enabled', False):
-        return img
-    
-    orig_w, orig_h = img.size
-    
-    # Конвертуємо відсотки в пікселі
-    x_percent = crop_config.get('x', 0)
-    y_percent = crop_config.get('y', 0)
-    w_percent = crop_config.get('w', 100)
-    h_percent = crop_config.get('h', 100)
-    
-    # Валідація
-    if w_percent < 10: w_percent = 10
-    if h_percent < 10: h_percent = 10
-    if x_percent + w_percent > 100: x_percent = 100 - w_percent
-    if y_percent + h_percent > 100: y_percent = 100 - h_percent
-    
-    # Обчислюємо координати
-    left = int(orig_w * x_percent / 100)
-    top = int(orig_h * y_percent / 100)
-    width = int(orig_w * w_percent / 100)
-    height = int(orig_h * h_percent / 100)
-    
-    right = left + width
-    bottom = top + height
-    
-    # Обрізаємо
-    return img.crop((left, top, right, bottom))
-
-
 def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int) -> tuple:
-    """Основна функція обробки зображення."""
+    """Основна функція обробки зображення з виправленим tiling."""
     input_io = io.BytesIO(file_bytes)
     img = Image.open(input_io)
     
@@ -136,36 +99,28 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
     
     img = img.convert("RGBA")
     
-    # --- CROP LOGIC (перед resize!) ---
-    crop_cfg = resize_config.get('crop', {})
-    if crop_cfg.get('enabled', False):
-        img = apply_crop(img, crop_cfg)
-    
-    # Оновлюємо розміри після crop
-    new_w, new_h = img.size
-    scale_factor = 1.0
-    
     # --- RESIZE LOGIC ---
     target_value = resize_config.get('value', 1920)
     mode = resize_config.get('mode', 'Max Side')
     enabled = resize_config.get('enabled', False)
+    
+    new_w, new_h = orig_w, orig_h
+    scale_factor = 1.0
 
     if enabled:
-        current_w, current_h = img.size
-        
-        if mode == "Max Side" and (current_w > target_value or current_h > target_value):
-            if current_w >= current_h:
-                scale_factor = target_value / float(current_w)
-                new_w, new_h = target_value, int(float(current_h) * scale_factor)
+        if mode == "Max Side" and (orig_w > target_value or orig_h > target_value):
+            if orig_w >= orig_h:
+                scale_factor = target_value / float(orig_w)
+                new_w, new_h = target_value, int(float(orig_h) * scale_factor)
             else:
-                scale_factor = target_value / float(current_h)
-                new_w, new_h = int(float(current_w) * scale_factor), target_value
+                scale_factor = target_value / float(orig_h)
+                new_w, new_h = int(float(orig_w) * scale_factor), target_value
         elif mode == "Exact Width":
-            scale_factor = target_value / float(current_w)
-            new_w, new_h = target_value, int(float(current_h) * scale_factor)
+            scale_factor = target_value / float(orig_w)
+            new_w, new_h = target_value, int(float(orig_h) * scale_factor)
         elif mode == "Exact Height":
-            scale_factor = target_value / float(current_h)
-            new_w, new_h = int(float(current_w) * scale_factor), target_value
+            scale_factor = target_value / float(orig_h)
+            new_w, new_h = int(float(orig_w) * scale_factor), target_value
 
         if scale_factor != 1.0:
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
@@ -178,7 +133,7 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
         
         # Валідація scale
         if scale > 0.8:
-            scale = 0.8
+            scale = 0.8  # Обмежуємо максимум 80%
         
         # 1. Базовий ресайз вотермарки
         wm_w_target = int(new_w * scale)
@@ -190,7 +145,7 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
         
         wm_resized = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
 
-        # 2. Поворот вотермарки
+        # 2. Поворот вотермарки (для всіх режимів)
         if angle != 0:
             wm_resized = wm_resized.rotate(angle, expand=True, resample=Image.BICUBIC)
 
@@ -198,28 +153,36 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
 
         # 3. Накладання
         if position == 'tiled':
-            # === DIAGONAL TILING ALGORITHM ===
+            # === FIXED DIAGONAL TILING ALGORITHM ===
             gap = resize_config.get('wm_gap', DEFAULT_CONFIG['wm_gap'])
             
+            # Створюємо прозорий шар
             overlay = Image.new('RGBA', (new_w, new_h), (0, 0, 0, 0))
             
+            # Визначаємо кроки з gap
             step_x = wm_w_final + gap
             step_y = wm_h_final + gap
             
+            # Захист від нескінченного циклу
             if step_x < 10: step_x = 10
             if step_y < 10: step_y = 10
             
-            rows_needed = (new_h // step_y) + 3
+            # Діагональне замощення з offset
+            # Починаємо з від'ємних координат, щоб покрити всю площину
+            rows_needed = (new_h // step_y) + 3  # +3 для перекриття країв
             cols_needed = (new_w // step_x) + 3
             
             for row in range(-1, rows_needed):
                 for col in range(-1, cols_needed):
+                    # Діагональний зсув: кожен наступний ряд зміщується на половину кроку
                     x = col * step_x + (row * step_x // 2)
                     y = row * step_y
                     
+                    # Пастимо тільки якщо хоч частково попадає в межі
                     if x + wm_w_final > 0 and x < new_w and y + wm_h_final > 0 and y < new_h:
                         overlay.paste(wm_resized, (x, y), wm_resized)
             
+            # Накладаємо шар з паттерном на основне фото
             img = Image.alpha_composite(img, overlay)
                 
         else:
@@ -238,6 +201,7 @@ def process_image(file_bytes: bytes, filename: str, wm_obj: Image.Image, resize_
             elif position == 'center': 
                 pos_x, pos_y = (new_w - wm_w_final) // 2, (new_h - wm_h_final) // 2
             
+            # Обмеження координат в межах картинки
             pos_x = max(0, min(pos_x, new_w - wm_w_final))
             pos_y = max(0, min(pos_y, new_h - wm_h_final))
             
