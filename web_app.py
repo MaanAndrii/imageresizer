@@ -43,7 +43,7 @@ TRANSLATIONS = {
         "error_wm_load": "❌ Помилка логотипу: {}",
         "res_savings": "Економія", 
         "btn_dl_zip": "📦 Скачати ZIP",
-        "exp_dl_separate": "⬇️ Скачати окремо", # Повернуто
+        "exp_dl_separate": "⬇️ Скачати окремо",
         "prev_header": "👁️ Живий перегляд",
         "grid_select_all": "✅ Обрати всі",
         "grid_deselect_all": "⬜ Зняти всі",
@@ -51,7 +51,7 @@ TRANSLATIONS = {
         "btn_selected": "✅ Обрано",
         "btn_select": "⬜ Обрати",
         "warn_no_files": "⚠️ Спочатку оберіть файли для обробки!",
-        "lang_select": "Мова / Language",
+        "lang_select": "Мова інтерфейсу / Interface Language",
         # About Section
         "about_prod": "**Продукт:** Watermarker Pro MaAn v4.8", 
         "about_auth": "**Автор:** Marynyuk Andriy", 
@@ -75,7 +75,7 @@ TRANSLATIONS = {
         "error_wm_load": "❌ Logo error: {}",
         "res_savings": "Savings", 
         "btn_dl_zip": "📦 Download ZIP",
-        "exp_dl_separate": "⬇️ Download Separate", # Returned
+        "exp_dl_separate": "⬇️ Download Separate",
         "prev_header": "👁️ Live Preview",
         "grid_select_all": "✅ Select All",
         "grid_deselect_all": "⬜ Deselect All",
@@ -83,7 +83,7 @@ TRANSLATIONS = {
         "btn_selected": "✅ Selected",
         "btn_select": "⬜ Select",
         "warn_no_files": "⚠️ Please select files first!",
-        "lang_select": "Language / Мова",
+        "lang_select": "Interface Language / Мова інтерфейсу",
         # About Section
         "about_prod": "**Product:** Watermarker Pro MaAn v4.8", 
         "about_auth": "**Author:** Marynyuk Andriy", 
@@ -223,7 +223,7 @@ with st.sidebar:
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
-    # --- ABOUT & LANGUAGE SECTION ---
+    # --- ABOUT & LANGUAGE SECTION (UPDATED) ---
     with st.expander("ℹ️ About / Про програму", expanded=False):
         st.markdown(T['about_prod'])
         st.markdown(T['about_auth'])
@@ -235,16 +235,17 @@ with st.sidebar:
             st.markdown(T['about_changelog'])
             
         st.divider()
-        # Вибір мови
-        sel_lang = st.selectbox(
-            T['lang_select'], 
-            ["🇺🇦 Українська", "🇺🇸 English"], 
-            index=0 if lang_code == 'ua' else 1
-        )
-        new_lang = 'ua' if 'Українська' in sel_lang else 'en'
-        if new_lang != lang_code:
-            st.session_state['lang_code'] = new_lang
-            st.rerun()
+        # Новий вибір мови (Кнопки-прапори)
+        st.caption(T['lang_select'])
+        lang_col1, lang_col2 = st.columns(2)
+        with lang_col1:
+            if st.button("🇺🇦 UA", type="primary" if lang_code == 'ua' else "secondary", use_container_width=True):
+                st.session_state['lang_code'] = 'ua'
+                st.rerun()
+        with lang_col2:
+            if st.button("🇺🇸 EN", type="primary" if lang_code == 'en' else "secondary", use_container_width=True):
+                st.session_state['lang_code'] = 'en'
+                st.rerun()
 
 st.title(T['title'])
 c_left, c_right = st.columns([1.8, 1], gap="large")
@@ -379,10 +380,9 @@ with c_left:
         st.success("Batch Processing Complete!")
         st.download_button(T['btn_dl_zip'], res['zip'], "photos.zip", "application/zip", type="primary")
         
-        with st.expander("Report"):
-            st.dataframe(pd.DataFrame(res['report']))
+        # --- (REMOVED) REPORT SECTION ---
             
-        # --- БЛОК ПОФАЙЛОВОГО ЗАВАНТАЖЕННЯ (ВІДНОВЛЕНО) ---
+        # --- БЛОК ПОФАЙЛОВОГО ЗАВАНТАЖЕННЯ ---
         with st.expander(T['exp_dl_separate']):
             for name, data in res['files']:
                 c1, c2 = st.columns([3, 1])
