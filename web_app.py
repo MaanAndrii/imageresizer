@@ -5,7 +5,7 @@ import zipfile
 import concurrent.futures
 from datetime import datetime
 import watermarker_engine as engine
-from gallery_component import render_gallery, generate_thumbnail
+from gallery_component import render_gallery, get_gallery_state
 
 # --- КОНФІГУРАЦІЯ ---
 st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
@@ -392,20 +392,17 @@ with c_left:
     
     if files_map:
         # Рендер галереї
-        selected, clicked = render_gallery(
-            files_map, 
-            st.session_state['selected_files'],
-            key="main_gallery"
-        )
+        render_gallery(files_map, key="main_gallery")
         
-        # Оновлення стану
-        if selected != st.session_state['selected_files']:
+        # Отримати стан галереї
+        selected, clicked = get_gallery_state("main_gallery")
+        
+        # Синхронізація з основним state
+        if selected != st.session_state.get('selected_files'):
             st.session_state['selected_files'] = selected
-            st.rerun()
         
         if clicked and clicked != st.session_state.get('preview_file'):
             st.session_state['preview_file'] = clicked
-            st.rerun()
         
         st.divider()
         
