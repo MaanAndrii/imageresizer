@@ -79,6 +79,8 @@ TRANSLATIONS = {
         "grid_select_all": "✅ Всі",
         "grid_deselect_all": "⬜ Жодного",
         "grid_delete": "🗑️ Видалити",
+        "btn_selected": "✅ Обрано", # ВІДНОВЛЕНО
+        "btn_select": "⬜ Обрати",   # ВІДНОВЛЕНО
         "warn_no_files": "⚠️ Спочатку оберіть файли!",
         
         "about_prod": "**Продукт:** Watermarker Pro MaAn v5.0", 
@@ -132,6 +134,8 @@ TRANSLATIONS = {
         "grid_select_all": "✅ All",
         "grid_deselect_all": "⬜ None",
         "grid_delete": "🗑️ Delete",
+        "btn_selected": "✅ Selected", # RESTORED
+        "btn_select": "⬜ Select",     # RESTORED
         "warn_no_files": "⚠️ Select files first!",
         
         "about_prod": "**Product:** Watermarker Pro MaAn v5.0", 
@@ -369,14 +373,10 @@ with c_left:
                 # --- ЛОГІКА ПІДГОТОВКИ ВОТЕРМАРКИ ---
                 wm_obj = None
                 try:
-                    # Пріоритет: Текст, якщо вкладка активна (але тут tabs не дають стан),
-                    # тому дивимось: якщо введено текст - використовуємо його, інакше файл
                     if wm_text.strip():
                         font_path = None
                         if selected_font_name:
                             font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
-                        
-                        # Генеруємо зображення з тексту (розмір шрифту базовий, scale його змінить)
                         wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
                         wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
                     elif wm_file:
@@ -438,7 +438,6 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
-            # Live Render Preview
             wm_obj = None
             try:
                 if wm_text.strip():
