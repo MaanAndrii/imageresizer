@@ -79,11 +79,18 @@ TRANSLATIONS = {
         "grid_select_all": "✅ Всі",
         "grid_deselect_all": "⬜ Жодного",
         "grid_delete": "🗑️ Видалити",
-        "btn_selected": "✅ Обрано", # ВІДНОВЛЕНО
-        "btn_select": "⬜ Обрати",   # ВІДНОВЛЕНО
+        "btn_selected": "✅ Обрано",
+        "btn_select": "⬜ Обрати",
         "warn_no_files": "⚠️ Спочатку оберіть файли!",
+        "lang_select": "Мова інтерфейсу / Interface Language",
         
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.0", 
+        "about_expander": "ℹ️ Про програму",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.0",
+        "about_auth": "**Автор:** Marynyuk Andriy", 
+        "about_lic": "**Ліцензія:** Proprietary", 
+        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
+        "about_copy": "© 2025 Всі права захищено",
+        "about_changelog_title": "📝 Історія змін",
         "about_changelog": "**v5.0 Text & Metadata:**\n- 🔤 Текстові вотермарки\n- 🔄 Авто-поворот фото (EXIF Fix)\n- 💾 Збереження метаданих камери"
     },
     "en": {
@@ -134,11 +141,18 @@ TRANSLATIONS = {
         "grid_select_all": "✅ All",
         "grid_deselect_all": "⬜ None",
         "grid_delete": "🗑️ Delete",
-        "btn_selected": "✅ Selected", # RESTORED
-        "btn_select": "⬜ Select",     # RESTORED
+        "btn_selected": "✅ Selected",
+        "btn_select": "⬜ Select",
         "warn_no_files": "⚠️ Select files first!",
+        "lang_select": "Interface Language / Мова інтерфейсу",
         
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.0", 
+        "about_expander": "ℹ️ About",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.0",
+        "about_auth": "**Author:** Marynyuk Andriy", 
+        "about_lic": "**License:** Proprietary", 
+        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
+        "about_copy": "© 2025 All rights reserved",
+        "about_changelog_title": "📝 Changelog",
         "about_changelog": "**v5.0 Text & Metadata:**\n- 🔤 Text Watermarks\n- 🔄 Auto-Rotation (EXIF Fix)\n- 💾 Metadata Preservation"
     }
 }
@@ -292,10 +306,19 @@ with st.sidebar:
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
-    with st.expander("ℹ️ About", expanded=False):
+    # --- ABOUT & LANGUAGE (FIXED) ---
+    with st.expander(T['about_expander'], expanded=False):
         st.markdown(T['about_prod'])
-        st.markdown(T['about_changelog'])
+        st.markdown(T['about_auth'])
+        st.markdown(T['about_lic'])
+        st.markdown(T['about_repo'])
+        st.caption(T['about_copy'])
+        
         st.divider()
+        st.markdown(T['about_changelog'])
+        
+        st.divider()
+        st.caption(T['lang_select'])
         lang_col1, lang_col2 = st.columns(2)
         with lang_col1:
             if st.button("🇺🇦 UA", type="primary" if lang_code == 'ua' else "secondary", use_container_width=True):
@@ -438,6 +461,7 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
+            # Live Render Preview
             wm_obj = None
             try:
                 if wm_text.strip():
