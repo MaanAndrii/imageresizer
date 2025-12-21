@@ -9,11 +9,11 @@ import concurrent.futures
 from datetime import datetime
 from PIL import Image
 import watermarker_engine as engine
+import glob
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.0", page_icon="📸", layout="wide")
 
-# Дефолтні налаштування
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
     'wm_pos': 'bottom-right',
@@ -21,7 +21,9 @@ DEFAULT_SETTINGS = {
     'wm_opacity': 1.0,
     'wm_margin': 15,
     'wm_gap': 30,
-    'wm_angle': 0
+    'wm_angle': 0,
+    'wm_text': '',
+    'wm_text_color': '#FFFFFF'
 }
 
 TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 45}
@@ -30,7 +32,7 @@ CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v4.9",
+        "title": "📸 Watermarker Pro v5.0",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
@@ -39,39 +41,33 @@ TRANSLATIONS = {
         "lbl_quality": "Якість (%)",
         "lbl_naming": "Іменування файлів",
         "lbl_prefix": "Префікс файлу",
-        "opt_keep_orig": "Зберегти оригінальну",
-        "opt_prefix_seq": "Префікс + Нумерація",
         
         "sec_geo": "2. Геометрія (Ресайз)",
         "chk_resize": "Змінювати розмір",
-        "lbl_mode": "Режим ресайзу",
-        "opt_max_side": "Макс. сторона",
-        "opt_exact_w": "Точна ширина",
-        "opt_exact_h": "Точна висота",
+        "lbl_mode": "Режим",
         "lbl_px": "Розмір (px)",
         
         "sec_wm": "3. Вотермарка",
-        "lbl_logo": "Логотип (PNG)",
+        "tab_logo": "🖼️ Логотип",
+        "tab_text": "🔤 Текст",
+        "lbl_logo_up": "Завантажити (PNG)",
+        "lbl_text_input": "Текст вотермарки",
+        "lbl_font": "Шрифт",
+        "lbl_color": "Колір",
+        
         "lbl_pos": "Позиція",
-        "opt_pos_br": "Знизу-праворуч",
-        "opt_pos_bl": "Знизу-ліворуч",
-        "opt_pos_tr": "Зверху-праворуч",
-        "opt_pos_tl": "Зверху-ліворуч",
-        "opt_pos_c": "Центр",
         "opt_pos_tile": "Замощення (Паттерн)",
-        "lbl_scale": "Масштаб (%)",
+        "lbl_scale": "Розмір / Масштаб (%)",
         "lbl_opacity": "Прозорість",
         "lbl_gap": "Проміжок (px)",
         "lbl_margin": "Відступ (px)",
         "lbl_angle": "Кут нахилу (°)",
-        "warn_scale": "⚠️ Логотип занадто великий! Це перекриє фото.",
         
         "files_header": "📂 Робоча область", 
         "uploader_label": "Завантажити фото",
         "btn_process": "🚀 Обробити", 
         "msg_done": "Готово!",
-        "error_wm_load": "❌ Помилка логотипу: {}",
-        "res_savings": "Економія", 
+        "error_wm_load": "❌ Помилка: {}",
         "btn_dl_zip": "📦 Скачати ZIP",
         "exp_dl_separate": "⬇️ Скачати окремо",
         
@@ -80,66 +76,51 @@ TRANSLATIONS = {
         "stat_res": "Роздільна здатність",
         "stat_size": "Розмір файлу",
         
-        "grid_select_all": "✅ Обрати всі",
-        "grid_deselect_all": "⬜ Зняти всі",
+        "grid_select_all": "✅ Всі",
+        "grid_deselect_all": "⬜ Жодного",
         "grid_delete": "🗑️ Видалити",
-        "btn_selected": "✅ Обрано",
-        "btn_select": "⬜ Обрати",
-        "warn_no_files": "⚠️ Спочатку оберіть файли для обробки!",
-        "lang_select": "Мова інтерфейсу / Interface Language",
+        "warn_no_files": "⚠️ Спочатку оберіть файли!",
         
-        "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.9", 
-        "about_auth": "**Автор:** Marynyuk Andriy", 
-        "about_lic": "**Ліцензія:** Proprietary", 
-        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
-        "about_copy": "© 2025 Всі права захищено",
-        "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Повна українізація інтерфейсу\n- 📊 Повернуто метрики файлів\n- 🎨 Новий дизайн заглушки прев'ю"
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.0", 
+        "about_changelog": "**v5.0 Text & Metadata:**\n- 🔤 Текстові вотермарки\n- 🔄 Авто-поворот фото (EXIF Fix)\n- 💾 Збереження метаданих камери"
     },
     "en": {
-        "title": "📸 Watermarker Pro v4.9",
+        "title": "📸 Watermarker Pro v5.0",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
         
         "sec_file": "1. File & Naming",
         "lbl_format": "Output Format",
         "lbl_quality": "Quality (%)",
-        "lbl_naming": "Naming Strategy",
-        "lbl_prefix": "Filename Prefix",
-        "opt_keep_orig": "Keep Original",
-        "opt_prefix_seq": "Prefix + Sequence",
+        "lbl_naming": "Naming",
+        "lbl_prefix": "Prefix",
         
         "sec_geo": "2. Geometry",
-        "chk_resize": "Enable Resize",
-        "lbl_mode": "Resize Mode",
-        "opt_max_side": "Max Side",
-        "opt_exact_w": "Exact Width",
-        "opt_exact_h": "Exact Height",
+        "chk_resize": "Resize",
+        "lbl_mode": "Mode",
         "lbl_px": "Size (px)",
         
         "sec_wm": "3. Watermark",
-        "lbl_logo": "Logo (PNG)",
+        "tab_logo": "🖼️ Logo",
+        "tab_text": "🔤 Text",
+        "lbl_logo_up": "Upload (PNG)",
+        "lbl_text_input": "Watermark Text",
+        "lbl_font": "Font",
+        "lbl_color": "Color",
+        
         "lbl_pos": "Position",
-        "opt_pos_br": "Bottom-Right",
-        "opt_pos_bl": "Bottom-Left",
-        "opt_pos_tr": "Top-Right",
-        "opt_pos_tl": "Top-Left",
-        "opt_pos_c": "Center",
         "opt_pos_tile": "Tiled (Pattern)",
-        "lbl_scale": "Scale (%)",
+        "lbl_scale": "Size / Scale (%)",
         "lbl_opacity": "Opacity",
         "lbl_gap": "Gap (px)",
         "lbl_margin": "Margin (px)",
         "lbl_angle": "Angle (°)",
-        "warn_scale": "⚠️ Logo is too large! It may cover the photo.",
         
         "files_header": "📂 Workspace", 
         "uploader_label": "Upload Photos",
         "btn_process": "🚀 Process", 
         "msg_done": "Done!",
-        "error_wm_load": "❌ Logo error: {}",
-        "res_savings": "Savings", 
+        "error_wm_load": "❌ Error: {}",
         "btn_dl_zip": "📦 Download ZIP",
         "exp_dl_separate": "⬇️ Download Separate",
         
@@ -148,22 +129,13 @@ TRANSLATIONS = {
         "stat_res": "Resolution",
         "stat_size": "File Size",
         
-        "grid_select_all": "✅ Select All",
-        "grid_deselect_all": "⬜ Deselect All",
+        "grid_select_all": "✅ All",
+        "grid_deselect_all": "⬜ None",
         "grid_delete": "🗑️ Delete",
-        "btn_selected": "✅ Selected",
-        "btn_select": "⬜ Select",
-        "warn_no_files": "⚠️ Please select files first!",
-        "lang_select": "Interface Language / Мова інтерфейсу",
+        "warn_no_files": "⚠️ Select files first!",
         
-        "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v4.9", 
-        "about_auth": "**Author:** Marynyuk Andriy", 
-        "about_lic": "**License:** Proprietary", 
-        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
-        "about_copy": "© 2025 All rights reserved",
-        "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Full UI Localization\n- 📊 Restored file metrics\n- 🎨 New Preview Placeholder"
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.0", 
+        "about_changelog": "**v5.0 Text & Metadata:**\n- 🔤 Text Watermarks\n- 🔄 Auto-Rotation (EXIF Fix)\n- 💾 Metadata Preservation"
     }
 }
 
@@ -182,40 +154,23 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    div[data-testid="column"] button {
-        width: 100%;
-        margin-top: 5px;
-    }
+    div[data-testid="column"] button { width: 100%; margin-top: 5px; }
     .block-container { padding-top: 2rem; }
-    
     .preview-placeholder {
-        border: 2px dashed #e0e0e0;
-        border-radius: 10px;
-        padding: 40px 20px;
-        text-align: center;
-        color: #888;
-        background-color: #fafafa;
-        margin-top: 10px;
+        border: 2px dashed #e0e0e0; border-radius: 10px;
+        padding: 40px 20px; text-align: center; color: #888;
+        background-color: #fafafa; margin-top: 10px;
     }
-    .preview-icon {
-        font-size: 40px;
-        margin-bottom: 10px;
-        display: block;
-    }
+    .preview-icon { font-size: 40px; margin-bottom: 10px; display: block; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- SESSION STATE ---
-if 'temp_dir' not in st.session_state:
-    st.session_state['temp_dir'] = tempfile.mkdtemp(prefix="wm_pro_")
-if 'file_cache' not in st.session_state:
-    st.session_state['file_cache'] = {} 
-if 'selected_files' not in st.session_state:
-    st.session_state['selected_files'] = set()
-if 'uploader_key' not in st.session_state: 
-    st.session_state['uploader_key'] = 0
-if 'lang_code' not in st.session_state: 
-    st.session_state['lang_code'] = 'ua'
+if 'temp_dir' not in st.session_state: st.session_state['temp_dir'] = tempfile.mkdtemp(prefix="wm_pro_")
+if 'file_cache' not in st.session_state: st.session_state['file_cache'] = {} 
+if 'selected_files' not in st.session_state: st.session_state['selected_files'] = set()
+if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
+if 'lang_code' not in st.session_state: st.session_state['lang_code'] = 'ua'
 
 # --- HELPERS ---
 def save_uploaded_file(uploaded_file):
@@ -225,19 +180,22 @@ def save_uploaded_file(uploaded_file):
         base, ext = os.path.splitext(uploaded_file.name)
         timestamp = datetime.now().strftime("%H%M%S")
         file_path = os.path.join(temp_dir, f"{base}_{timestamp}{ext}")
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+    with open(file_path, "wb") as f: f.write(uploaded_file.getbuffer())
     return file_path, os.path.basename(file_path)
+
+def get_available_fonts():
+    """Шукає шрифти в папці assets/fonts."""
+    font_dir = os.path.join(os.getcwd(), 'assets', 'fonts')
+    if not os.path.exists(font_dir):
+        return []
+    fonts = glob.glob(os.path.join(font_dir, "*.ttf")) + glob.glob(os.path.join(font_dir, "*.otf"))
+    return [os.path.basename(f) for f in fonts]
 
 # --- INIT SETTINGS ---
 for k, v in DEFAULT_SETTINGS.items():
     key_name = f'{k}_key' if not k.endswith('_val') else f'{k}_state'
-    if key_name not in st.session_state: 
-        st.session_state[key_name] = v
-if 'wm_gap_key' not in st.session_state:
-    st.session_state['wm_gap_key'] = DEFAULT_SETTINGS['wm_gap']
+    if key_name not in st.session_state: st.session_state[key_name] = v
 
-# --- CALLBACK: AUTO-SETTINGS ---
 def handle_pos_change():
     if st.session_state['wm_pos_key'] == 'tiled':
         st.session_state['wm_scale_key'] = TILED_SETTINGS['wm_scale']
@@ -258,37 +216,26 @@ def reset_settings():
     st.session_state['wm_margin_key'] = DEFAULT_SETTINGS['wm_margin']
     st.session_state['wm_gap_key'] = DEFAULT_SETTINGS['wm_gap']
     st.session_state['wm_angle_key'] = DEFAULT_SETTINGS['wm_angle']
+    st.session_state['wm_text_key'] = DEFAULT_SETTINGS['wm_text']
+    st.session_state['wm_text_color_key'] = DEFAULT_SETTINGS['wm_text_color']
 
 # --- UI START ---
 with st.sidebar:
     lang_code = st.session_state['lang_code']
     T = TRANSLATIONS[lang_code]
     
-    def format_naming(key): return T['opt_keep_orig'] if key == "Keep Original" else T['opt_prefix_seq']
-    def format_resize(key):
-        if key == "Max Side": return T['opt_max_side']
-        if key == "Exact Width": return T['opt_exact_w']
-        return T['opt_exact_h']
-    def format_pos(key):
-        map_pos = {
-            'bottom-right': T['opt_pos_br'], 'bottom-left': T['opt_pos_bl'],
-            'top-right': T['opt_pos_tr'], 'top-left': T['opt_pos_tl'],
-            'center': T['opt_pos_c'], 'tiled': T['opt_pos_tile']
-        }
-        return map_pos.get(key, key)
-
     st.header(T['sb_config'])
     
     with st.expander(T['sec_file']):
         out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"])
         quality = 80
         if out_fmt != "PNG": quality = st.slider(T['lbl_quality'], 50, 100, 80, 5)
-        naming_mode = st.selectbox(T['lbl_naming'], ["Keep Original", "Prefix + Sequence"], format_func=format_naming)
+        naming_mode = st.selectbox(T['lbl_naming'], ["Keep Original", "Prefix + Sequence"])
         prefix = st.text_input(T['lbl_prefix'], placeholder="img")
 
     with st.expander(T['sec_geo'], expanded=True):
         resize_on = st.checkbox(T['chk_resize'], value=True)
-        resize_mode = st.selectbox(T['lbl_mode'], ["Max Side", "Exact Width", "Exact Height"], disabled=not resize_on, format_func=format_resize)
+        resize_mode = st.selectbox(T['lbl_mode'], ["Max Side", "Exact Width", "Exact Height"], disabled=not resize_on)
         c1, c2, c3 = st.columns(3)
         def set_res(v): st.session_state['resize_val_state'] = v
         c1.button("HD", on_click=set_res, args=(1280,), use_container_width=True)
@@ -297,17 +244,36 @@ with st.sidebar:
         resize_val = st.number_input(T['lbl_px'], 100, 8000, key='resize_val_state', disabled=not resize_on)
 
     with st.expander(T['sec_wm'], expanded=True):
-        wm_file = st.file_uploader(T['lbl_logo'], type=["png"])
+        # Вкладки: Логотип / Текст
+        tab1, tab2 = st.tabs([T['tab_logo'], T['tab_text']])
         
-        # KEY: Виклик handle_pos_change при зміні
-        wm_pos = st.selectbox(T['lbl_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], 
-                              key='wm_pos_key', on_change=handle_pos_change, format_func=format_pos)
+        wm_type = "image"
         
-        wm_scale = st.slider(T['lbl_scale'], 5, 80, key='wm_scale_key') / 100
-        # Попередження про масштаб
-        if wm_scale > 0.5 and wm_pos != 'tiled':
-            st.warning(T['warn_scale'])
+        with tab1:
+            wm_file = st.file_uploader(T['lbl_logo_up'], type=["png"], key="wm_uploader")
+            if wm_file: wm_type = "image"
+            
+        with tab2:
+            wm_text = st.text_area(T['lbl_text_input'], key='wm_text_key')
+            
+            # Пошук шрифтів
+            fonts = get_available_fonts()
+            selected_font_name = None
+            if fonts:
+                selected_font_name = st.selectbox(T['lbl_font'], fonts)
+            else:
+                st.caption("No fonts found in assets/fonts. Using default.")
+                
+            wm_text_color = st.color_picker(T['lbl_color'], '#FFFFFF', key='wm_text_color_key')
+            if wm_text: wm_type = "text"
 
+        st.divider()
+        
+        # Спільні налаштування
+        wm_pos = st.selectbox(T['lbl_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], 
+                              key='wm_pos_key', on_change=handle_pos_change)
+        
+        wm_scale = st.slider(T['lbl_scale'], 5, 100, key='wm_scale_key') / 100
         wm_opacity = st.slider(T['lbl_opacity'], 0.1, 1.0, key='wm_opacity_key')
         
         if wm_pos == 'tiled':
@@ -322,27 +288,17 @@ with st.sidebar:
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
-    with st.expander(T['about_expander'], expanded=False):
+    with st.expander("ℹ️ About", expanded=False):
         st.markdown(T['about_prod'])
-        st.markdown(T['about_auth'])
-        st.markdown(T['about_lic'])
-        st.markdown(T['about_repo'])
-        st.caption(T['about_copy'])
-        
-        with st.expander(T['about_changelog_title']):
-            st.markdown(T['about_changelog'])
-            
+        st.markdown(T['about_changelog'])
         st.divider()
-        st.caption(T['lang_select'])
         lang_col1, lang_col2 = st.columns(2)
         with lang_col1:
             if st.button("🇺🇦 UA", type="primary" if lang_code == 'ua' else "secondary", use_container_width=True):
-                st.session_state['lang_code'] = 'ua'
-                st.rerun()
+                st.session_state['lang_code'] = 'ua'; st.rerun()
         with lang_col2:
             if st.button("🇺🇸 EN", type="primary" if lang_code == 'en' else "secondary", use_container_width=True):
-                st.session_state['lang_code'] = 'en'
-                st.rerun()
+                st.session_state['lang_code'] = 'en'; st.rerun()
 
 st.title(T['title'])
 c_left, c_right = st.columns([1.8, 1], gap="large")
@@ -376,8 +332,7 @@ with c_left:
             sel_count = len(st.session_state['selected_files'])
             if st.button(f"{T['grid_delete']} ({sel_count})", type="primary", use_container_width=True, disabled=sel_count==0):
                 for f in list(st.session_state['selected_files']):
-                    if f in files_map:
-                        del files_map[f]
+                    if f in files_map: del files_map[f]
                 st.session_state['selected_files'].clear()
                 st.rerun()
         
@@ -391,10 +346,8 @@ with c_left:
             fpath = files_map[fname]
             with col:
                 thumb = engine.get_thumbnail(fpath)
-                if thumb:
-                    st.image(thumb, use_container_width=True)
-                else:
-                    st.warning("Error")
+                if thumb: st.image(thumb, use_container_width=True)
+                else: st.warning("Error")
                 
                 is_sel = fname in st.session_state['selected_files']
                 if st.button(T['btn_selected'] if is_sel else T['btn_select'], key=f"btn_{fname}", type="primary" if is_sel else "secondary", use_container_width=True):
@@ -412,14 +365,27 @@ with c_left:
                 st.warning(T['warn_no_files'])
             else:
                 progress = st.progress(0)
-                wm_bytes = wm_file.getvalue() if wm_file else None
+                
+                # --- ЛОГІКА ПІДГОТОВКИ ВОТЕРМАРКИ ---
                 wm_obj = None
-                if wm_bytes:
-                    try:
-                        wm_obj = engine.load_and_process_watermark(wm_bytes, wm_opacity)
-                    except Exception as e:
-                        st.error(T['error_wm_load'].format(e))
-                        st.stop()
+                try:
+                    # Пріоритет: Текст, якщо вкладка активна (але тут tabs не дають стан),
+                    # тому дивимось: якщо введено текст - використовуємо його, інакше файл
+                    if wm_text.strip():
+                        font_path = None
+                        if selected_font_name:
+                            font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
+                        
+                        # Генеруємо зображення з тексту (розмір шрифту базовий, scale його змінить)
+                        wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
+                        wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                    elif wm_file:
+                        wm_bytes = wm_file.getvalue()
+                        wm_obj = engine.load_watermark_from_file(wm_bytes)
+                        wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                except Exception as e:
+                    st.error(T['error_wm_load'].format(e))
+                    st.stop()
                 
                 resize_cfg = {
                     'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
@@ -447,8 +413,7 @@ with c_left:
                                 zf.writestr(stats['filename'], res_bytes)
                                 results.append((stats['filename'], res_bytes))
                                 report.append(stats)
-                            except Exception as e:
-                                st.error(f"Error {futures[fut]}: {e}")
+                            except Exception as e: st.error(f"Error {futures[fut]}: {e}")
                             progress.progress((i+1)/len(process_list))
                 
                 st.session_state['results'] = {'zip': zip_buffer.getvalue(), 'files': results, 'report': report}
@@ -458,7 +423,6 @@ with c_left:
         res = st.session_state['results']
         st.success("Batch Processing Complete!")
         st.download_button(T['btn_dl_zip'], res['zip'], "photos.zip", "application/zip", type="primary")
-        
         with st.expander(T['exp_dl_separate']):
             for name, data in res['files']:
                 c1, c2 = st.columns([3, 1])
@@ -473,11 +437,20 @@ with c_right:
     with st.container(border=True):
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
-            wm_bytes = wm_file.getvalue() if wm_file else None
+            
+            # Live Render Preview
             wm_obj = None
-            if wm_bytes:
-                try: wm_obj = engine.load_and_process_watermark(wm_bytes, wm_opacity)
-                except: pass
+            try:
+                if wm_text.strip():
+                    font_path = None
+                    if selected_font_name:
+                        font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
+                    wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
+                    if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                elif wm_file:
+                    wm_obj = engine.load_watermark_from_file(wm_file.getvalue())
+                    if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+            except: pass
             
             resize_cfg = {
                 'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
@@ -487,32 +460,14 @@ with c_right:
             }
             
             try:
-                # Генеруємо реальне ім'я для прев'ю
                 preview_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), 1)
-                
                 prev_bytes, stats = engine.process_image(fpath, preview_fname, wm_obj, resize_cfg, out_fmt, quality)
                 
-                # --- ПОКРАЩЕНЕ ПРЕВ'Ю ---
                 st.image(prev_bytes, caption=f"{stats['filename']}", use_container_width=True)
-                
-                # Метрики з дельтою
                 m1, m2 = st.columns(2)
                 delta_size = ((stats['new_size'] - stats['orig_size']) / stats['orig_size']) * 100
-                
                 m1.metric(T['stat_res'], stats['new_res'], stats['scale_factor'])
-                m2.metric(
-                    T['stat_size'], 
-                    f"{stats['new_size']/1024:.1f} KB", 
-                    f"{delta_size:.1f}%", 
-                    delta_color="inverse"
-                )
-                
-            except Exception as e:
-                st.error(f"Preview Error: {e}")
+                m2.metric(T['stat_size'], f"{stats['new_size']/1024:.1f} KB", f"{delta_size:.1f}%", delta_color="inverse")
+            except Exception as e: st.error(f"Preview Error: {e}")
         else:
-            st.markdown(f"""
-            <div class="preview-placeholder">
-                <span class="preview-icon">🖼️</span>
-                <p>{T['prev_placeholder']}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div class="preview-placeholder"><span class="preview-icon">🖼️</span><p>{T['prev_placeholder']}</p></div>""", unsafe_allow_html=True)
