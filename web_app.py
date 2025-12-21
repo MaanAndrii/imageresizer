@@ -90,7 +90,7 @@ TRANSLATIONS = {
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
-        "about_changelog_title": "📝 Історія змін",
+        "about_changelog_title": "📝 Історія змін", # ПОВЕРНУТО
         "about_changelog": "**v5.0 Text & Metadata:**\n- 🔤 Текстові вотермарки\n- 🔄 Авто-поворот фото (EXIF Fix)\n- 💾 Збереження метаданих камери"
     },
     "en": {
@@ -152,7 +152,7 @@ TRANSLATIONS = {
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
-        "about_changelog_title": "📝 Changelog",
+        "about_changelog_title": "📝 Changelog", # ПОВЕРНУТО
         "about_changelog": "**v5.0 Text & Metadata:**\n- 🔤 Text Watermarks\n- 🔄 Auto-Rotation (EXIF Fix)\n- 💾 Metadata Preservation"
     }
 }
@@ -306,7 +306,7 @@ with st.sidebar:
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
-    # --- ABOUT & LANGUAGE (FIXED) ---
+    # --- ABOUT SECTION (FIXED) ---
     with st.expander(T['about_expander'], expanded=False):
         st.markdown(T['about_prod'])
         st.markdown(T['about_auth'])
@@ -314,9 +314,10 @@ with st.sidebar:
         st.markdown(T['about_repo'])
         st.caption(T['about_copy'])
         
-        st.divider()
-        st.markdown(T['about_changelog'])
-        
+        # ПОВЕРНУТО ВЛАДЕНИЙ EXPANDER
+        with st.expander(T['about_changelog_title']):
+            st.markdown(T['about_changelog'])
+            
         st.divider()
         st.caption(T['lang_select'])
         lang_col1, lang_col2 = st.columns(2)
