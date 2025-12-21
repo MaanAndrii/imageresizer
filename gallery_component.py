@@ -1,5 +1,6 @@
 import streamlit as st
 import base64
+import json
 from io import BytesIO
 from PIL import Image
 
@@ -34,24 +35,27 @@ def generate_thumbnail(file_bytes, size=(200, 200)):
         
         return f"data:image/jpeg;base64,{img_str}"
     except Exception as e:
-        # Повертаємо placeholder при помилці
         return None
 
 
-def render_gallery(files_dict, selected_files=None, key="gallery"):
+def render_gallery(files_dict, key="gallery"):
     """
     Рендерить галерею зображень з можливістю вибору.
     
     Args:
         files_dict: dict {filename: file_bytes}
-        selected_files: set of selected filenames
         key: unique key for component
     
     Returns:
-        tuple: (selected_files_set, clicked_file)
+        None (uses session_state)
     """
-    if selected_files is None:
-        selected_files = set()
+    # Ініціалізація state
+    if f'{key}_selected' not in st.session_state:
+        st.session_state[f'{key}_selected'] = set()
+    if f'{key}_clicked' not in st.session_state:
+        st.session_state[f'{key}_clicked'] = None
+    
+    selected_files = st.session_state[f'{key}_selected']
     
     # Генеруємо thumbnails з кешуванням
     thumbnails = {}
@@ -90,6 +94,9 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
             'selected': fname in selected_files,
             'info': file_info[fname]
         })
+    
+    # Конвертуємо в JSON безпечно
+    gallery_json = json.dumps(gallery_data, ensure_ascii=False)
     
     # HTML + CSS + JS компонент
     html_code = f"""
@@ -190,7 +197,7 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
             .thumbnail-wrapper {{
                 position: relative;
                 width: 100%;
-                padding-top: 100%; /* 1:1 Aspect Ratio */
+                padding-top: 100%;
                 background: #f8f9fa;
                 overflow: hidden;
             }}
@@ -342,7 +349,7 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
         <div class="gallery-container">
             <div class="gallery-header">
                 <div class="gallery-info">
-                    <strong id="total-count">{len(gallery_data)}</strong> файлів
+                    <strong id="total-count">0</strong> файлів
                 </div>
                 <button class="select-all-btn" onclick="toggleSelectAll()">
                     Вибрати всі
@@ -364,7 +371,7 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
         </div>
         
         <script>
-            const galleryData = {gallery_data};
+            const galleryData = {gallery_json};
             let selectedFiles = new Set();
             let lastClickedFile = null;
             
@@ -383,7 +390,9 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
             
             function renderGallery() {{
                 const grid = document.getElementById('gallery-grid');
+                const totalCount = document.getElementById('total-count');
                 grid.innerHTML = '';
+                totalCount.textContent = galleryData.length;
                 
                 galleryData.forEach((item, index) => {{
                     const isSelected = selectedFiles.has(item.filename);
@@ -428,7 +437,7 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
                 
                 lastClickedFile = filename;
                 renderGallery();
-                sendSelectionToStreamlit();
+                notifyStreamlit();
             }}
             
             function toggleSelectAll() {{
@@ -440,13 +449,13 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
                     }});
                 }}
                 renderGallery();
-                sendSelectionToStreamlit();
+                notifyStreamlit();
             }}
             
             function clearSelection() {{
                 selectedFiles.clear();
                 renderGallery();
-                sendSelectionToStreamlit();
+                notifyStreamlit();
             }}
             
             function updateSummary() {{
@@ -466,17 +475,27 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
                     'Скасувати всі' : 'Вибрати всі';
             }}
             
-            function sendSelectionToStreamlit() {{
-                const data = {{
-                    selected: Array.from(selectedFiles),
-                    lastClicked: lastClickedFile
-                }};
+            function notifyStreamlit() {{
+                // Використовуємо Streamlit query params для комунікації
+                const params = new URLSearchParams(window.location.search);
+                params.set('gallery_selected', Array.from(selectedFiles).join(','));
+                params.set('gallery_clicked', lastClickedFile || '');
+                params.set('gallery_timestamp', Date.now());
                 
-                // Відправка даних в Streamlit через window.parent.postMessage
-                window.parent.postMessage({{
-                    type: 'streamlit:setComponentValue',
-                    data: data
-                }}, '*');
+                // Оновлюємо URL без перезавантаження
+                const newUrl = window.location.pathname + '?' + params.toString();
+                window.history.replaceState(null, '', newUrl);
+                
+                // Trigger Streamlit rerun через iframe communication
+                if (window.parent) {{
+                    window.parent.postMessage({{
+                        type: 'streamlit:setComponentValue',
+                        value: {{
+                            selected: Array.from(selectedFiles),
+                            clicked: lastClickedFile
+                        }}
+                    }}, '*');
+                }}
             }}
             
             // Початковий рендер
@@ -486,17 +505,46 @@ def render_gallery(files_dict, selected_files=None, key="gallery"):
     </html>
     """
     
-    # Рендеримо компонент
-    result = st.components.v1.html(
+    # Рендеримо компонент БЕЗ очікування результату
+    st.components.v1.html(
         html_code,
         height=600,
         scrolling=True
     )
     
-    # Обробка результату
-    if result:
-        new_selected = set(result.get('selected', []))
-        clicked = result.get('lastClicked', None)
-        return new_selected, clicked
+    # Читаємо стан з query params (якщо є)
+    try:
+        query_params = st.query_params
+        if 'gallery_selected' in query_params:
+            selected_str = query_params.get('gallery_selected', '')
+            if selected_str:
+                new_selected = set(selected_str.split(','))
+            else:
+                new_selected = set()
+            
+            clicked = query_params.get('gallery_clicked', '')
+            
+            # Оновлюємо тільки якщо змінилось
+            if new_selected != st.session_state[f'{key}_selected']:
+                st.session_state[f'{key}_selected'] = new_selected
+            
+            if clicked and clicked != st.session_state[f'{key}_clicked']:
+                st.session_state[f'{key}_clicked'] = clicked
+    except:
+        pass
+
+
+def get_gallery_state(key="gallery"):
+    """Отримує поточний стан галереї."""
+    selected_key = f'{key}_selected'
+    clicked_key = f'{key}_clicked'
     
-    return selected_files, None
+    if selected_key not in st.session_state:
+        st.session_state[selected_key] = set()
+    if clicked_key not in st.session_state:
+        st.session_state[clicked_key] = None
+    
+    return (
+        st.session_state[selected_key],
+        st.session_state[clicked_key]
+    )
