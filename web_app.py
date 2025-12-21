@@ -12,7 +12,7 @@ import watermarker_engine as engine
 import glob
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro v5.0", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.1", page_icon="📸", layout="wide")
 
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
@@ -32,7 +32,7 @@ CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v5.0",
+        "title": "📸 Watermarker Pro v5.1",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
@@ -82,19 +82,22 @@ TRANSLATIONS = {
         "btn_selected": "✅ Обрано",
         "btn_select": "⬜ Обрати",
         "warn_no_files": "⚠️ Спочатку оберіть файли!",
-        "lang_select": "Мова інтерфейсу / Interface Language",
+        
+        # New keys for v5.1
+        "btn_clear_workspace": "♻️ Очистити все",
+        "expander_add_files": "📤 Додати файли (Drag & Drop)",
         
         "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.0",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.1",
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
-        "about_changelog_title": "📝 Історія змін", # ПОВЕРНУТО
-        "about_changelog": "**v5.0 Text & Metadata:**\n- 🔤 Текстові вотермарки\n- 🔄 Авто-поворот фото (EXIF Fix)\n- 💾 Збереження метаданих камери"
+        "about_changelog_title": "📝 Історія змін",
+        "about_changelog": "**v5.1 UI Update:**\n- 🧹 Кнопка повного очищення\n- 📦 Компактний режим завантаження\n- ⚡ Покращений UX робочої області"
     },
     "en": {
-        "title": "📸 Watermarker Pro v5.0",
+        "title": "📸 Watermarker Pro v5.1",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
         
@@ -144,16 +147,19 @@ TRANSLATIONS = {
         "btn_selected": "✅ Selected",
         "btn_select": "⬜ Select",
         "warn_no_files": "⚠️ Select files first!",
-        "lang_select": "Interface Language / Мова інтерфейсу",
+        
+        # New keys for v5.1
+        "btn_clear_workspace": "♻️ Clear Workspace",
+        "expander_add_files": "📤 Add Files (Drag & Drop)",
         
         "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.0",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.1",
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
-        "about_changelog_title": "📝 Changelog", # ПОВЕРНУТО
-        "about_changelog": "**v5.0 Text & Metadata:**\n- 🔤 Text Watermarks\n- 🔄 Auto-Rotation (EXIF Fix)\n- 💾 Metadata Preservation"
+        "about_changelog_title": "📝 Changelog",
+        "about_changelog": "**v5.1 UI Update:**\n- 🧹 Clear Workspace Button\n- 📦 Compact Uploader Mode\n- ⚡ Improved Workspace UX"
     }
 }
 
@@ -202,10 +208,8 @@ def save_uploaded_file(uploaded_file):
     return file_path, os.path.basename(file_path)
 
 def get_available_fonts():
-    """Шукає шрифти в папці assets/fonts."""
     font_dir = os.path.join(os.getcwd(), 'assets', 'fonts')
-    if not os.path.exists(font_dir):
-        return []
+    if not os.path.exists(font_dir): return []
     fonts = glob.glob(os.path.join(font_dir, "*.ttf")) + glob.glob(os.path.join(font_dir, "*.otf"))
     return [os.path.basename(f) for f in fonts]
 
@@ -262,35 +266,22 @@ with st.sidebar:
         resize_val = st.number_input(T['lbl_px'], 100, 8000, key='resize_val_state', disabled=not resize_on)
 
     with st.expander(T['sec_wm'], expanded=True):
-        # Вкладки: Логотип / Текст
         tab1, tab2 = st.tabs([T['tab_logo'], T['tab_text']])
-        
         wm_type = "image"
-        
         with tab1:
             wm_file = st.file_uploader(T['lbl_logo_up'], type=["png"], key="wm_uploader")
             if wm_file: wm_type = "image"
-            
         with tab2:
             wm_text = st.text_area(T['lbl_text_input'], key='wm_text_key')
-            
-            # Пошук шрифтів
             fonts = get_available_fonts()
-            selected_font_name = None
-            if fonts:
-                selected_font_name = st.selectbox(T['lbl_font'], fonts)
-            else:
-                st.caption("No fonts found in assets/fonts. Using default.")
-                
+            selected_font_name = st.selectbox(T['lbl_font'], fonts) if fonts else None
+            if not fonts: st.caption("No fonts found in assets/fonts. Using default.")
             wm_text_color = st.color_picker(T['lbl_color'], '#FFFFFF', key='wm_text_color_key')
             if wm_text: wm_type = "text"
 
         st.divider()
-        
-        # Спільні налаштування
         wm_pos = st.selectbox(T['lbl_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], 
                               key='wm_pos_key', on_change=handle_pos_change)
-        
         wm_scale = st.slider(T['lbl_scale'], 5, 100, key='wm_scale_key') / 100
         wm_opacity = st.slider(T['lbl_opacity'], 0.1, 1.0, key='wm_opacity_key')
         
@@ -300,13 +291,11 @@ with st.sidebar:
         else:
             wm_margin = st.slider(T['lbl_margin'], 0, 100, key='wm_margin_key')
             wm_gap = 0
-            
         wm_angle = st.slider(T['lbl_angle'], -180, 180, key='wm_angle_key')
 
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
-    # --- ABOUT SECTION (FIXED) ---
     with st.expander(T['about_expander'], expanded=False):
         st.markdown(T['about_prod'])
         st.markdown(T['about_auth'])
@@ -314,7 +303,6 @@ with st.sidebar:
         st.markdown(T['about_repo'])
         st.caption(T['about_copy'])
         
-        # ПОВЕРНУТО ВЛАДЕНИЙ EXPANDER
         with st.expander(T['about_changelog_title']):
             st.markdown(T['about_changelog'])
             
@@ -332,9 +320,27 @@ st.title(T['title'])
 c_left, c_right = st.columns([1.8, 1], gap="large")
 
 with c_left:
-    st.subheader(T['files_header'])
+    # --- HEADER + CLEAR BUTTON ---
+    col_head, col_clear = st.columns([2, 1])
+    with col_head:
+        st.subheader(T['files_header'])
+    with col_clear:
+        # Кнопка Очистити все
+        if st.button(T['btn_clear_workspace'], type="secondary", use_container_width=True):
+            st.session_state['file_cache'] = {}
+            st.session_state['selected_files'] = set()
+            st.session_state['uploader_key'] += 1 # Reset uploader
+            st.session_state['results'] = None
+            if os.path.exists(st.session_state['temp_dir']):
+                shutil.rmtree(st.session_state['temp_dir'])
+                st.session_state['temp_dir'] = tempfile.mkdtemp(prefix="wm_pro_")
+            st.rerun()
     
-    uploaded = st.file_uploader(T['uploader_label'], type=['jpg','jpeg','png','webp'], accept_multiple_files=True, label_visibility="collapsed", key=f"up_{st.session_state['uploader_key']}")
+    # --- COMPACT UPLOADER (EXPANDER) ---
+    has_files = len(st.session_state['file_cache']) > 0
+    # Якщо файли є - згортаємо, якщо ні - розгортаємо
+    with st.expander(T['expander_add_files'], expanded=not has_files):
+        uploaded = st.file_uploader(T['uploader_label'], type=['jpg','jpeg','png','webp'], accept_multiple_files=True, label_visibility="collapsed", key=f"up_{st.session_state['uploader_key']}")
     
     if uploaded:
         for f in uploaded:
@@ -394,7 +400,6 @@ with c_left:
             else:
                 progress = st.progress(0)
                 
-                # --- ЛОГІКА ПІДГОТОВКИ ВОТЕРМАРКИ ---
                 wm_obj = None
                 try:
                     if wm_text.strip():
@@ -462,7 +467,6 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
-            # Live Render Preview
             wm_obj = None
             try:
                 if wm_text.strip():
