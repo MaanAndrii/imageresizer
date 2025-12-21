@@ -6,7 +6,6 @@ import shutil
 import tempfile
 import zipfile
 import concurrent.futures
-from pathlib import Path
 from datetime import datetime
 from PIL import Image
 import watermarker_engine as engine
@@ -51,7 +50,8 @@ TRANSLATIONS = {
         "btn_selected": "✅ Обрано",
         "btn_select": "⬜ Обрати",
         "warn_no_files": "⚠️ Спочатку оберіть файли для обробки!",
-        "about_prod": "**Watermarker Pro MaAn v4.8**\n\nStable Core Update (TempFile + Grid)",
+        "lang_select": "Мова / Language",
+        "about_prod": "**Watermarker Pro MaAn v4.8**\n\nStable Core Update (TempFile + Grid)\n\n© 2025 Maryniuk Andrii",
     },
     "en": {
         "title": "📸 Watermarker Pro v4.8",
@@ -74,23 +74,19 @@ TRANSLATIONS = {
         "btn_selected": "✅ Selected",
         "btn_select": "⬜ Select",
         "warn_no_files": "⚠️ Please select files first!",
-        "about_prod": "**Watermarker Pro MaAn v4.8**\n\nStable Core Update (TempFile + Grid)",
+        "lang_select": "Language / Мова",
+        "about_prod": "**Watermarker Pro MaAn v4.8**\n\nStable Core Update (TempFile + Grid)\n\n© 2025 Maryniuk Andrii",
     }
 }
 
 # --- CSS STYLING ---
 st.markdown("""
 <style>
-    /* Card Style for Grid */
-    div[data-testid="column"] > div > div > div > div {
-       /* Це націлено на внутрішні контейнери, може потребувати коригування під версію */
-    }
-    
     /* Робимо колонки схожими на картки */
     div[data-testid="column"] {
         background-color: #f8f9fa;
-        padding: 10px;
         border-radius: 8px;
+        padding: 10px;
         border: 1px solid #eee;
         transition: all 0.2s ease;
     }
@@ -131,7 +127,6 @@ def save_uploaded_file(uploaded_file):
     temp_dir = st.session_state['temp_dir']
     file_path = os.path.join(temp_dir, uploaded_file.name)
     
-    # Захист від перезапису існуючих (якщо імена однакові)
     if os.path.exists(file_path):
         base, ext = os.path.splitext(uploaded_file.name)
         timestamp = datetime.now().strftime("%H%M%S")
@@ -140,14 +135,6 @@ def save_uploaded_file(uploaded_file):
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
     return file_path, os.path.basename(file_path)
-
-def cleanup_temp():
-    """Очищення тимчасової папки (при ресеті)."""
-    if os.path.exists(st.session_state['temp_dir']):
-        shutil.rmtree(st.session_state['temp_dir'])
-    st.session_state['temp_dir'] = tempfile.mkdtemp(prefix="wm_pro_")
-    st.session_state['file_cache'] = {}
-    st.session_state['selected_files'] = set()
 
 # --- INIT SETTINGS ---
 for k, v in DEFAULT_SETTINGS.items():
@@ -220,13 +207,21 @@ with st.sidebar:
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
-    st.info(T['about_prod'])
-    
-    sel_lang = st.selectbox("Language", ["🇺🇦 UA", "🇺🇸 EN"], index=0 if lang_code == 'ua' else 1)
-    new_lang = 'ua' if 'UA' in sel_lang else 'en'
-    if new_lang != lang_code:
-        st.session_state['lang_code'] = new_lang
-        st.rerun()
+    # --- ABOUT & LANGUAGE SECTION ---
+    with st.expander("ℹ️ Info / Про програму", expanded=False):
+        st.markdown(T['about_prod'])
+        st.divider()
+        
+        # Вибір мови
+        sel_lang = st.selectbox(
+            T['lang_select'], 
+            ["🇺🇦 Українська", "🇺🇸 English"], 
+            index=0 if lang_code == 'ua' else 1
+        )
+        new_lang = 'ua' if 'Українська' in sel_lang else 'en'
+        if new_lang != lang_code:
+            st.session_state['lang_code'] = new_lang
+            st.rerun()
 
 st.title(T['title'])
 c_left, c_right = st.columns([1.8, 1], gap="large")
@@ -239,7 +234,6 @@ with c_left:
     
     if uploaded:
         for f in uploaded:
-            # Зберігаємо на диск, а не в RAM
             fpath, fname = save_uploaded_file(f)
             st.session_state['file_cache'][fname] = fpath
         st.session_state['uploader_key'] += 1
@@ -264,7 +258,6 @@ with c_left:
             if st.button(f"{T['grid_delete']} ({sel_count})", type="primary", use_container_width=True, disabled=sel_count==0):
                 for f in list(st.session_state['selected_files']):
                     if f in files_map:
-                        # Видалити фізичний файл можна тут, або залишити до cleanup
                         del files_map[f]
                 st.session_state['selected_files'].clear()
                 st.rerun()
@@ -290,7 +283,6 @@ with c_left:
                 
                 is_sel = fname in st.session_state['selected_files']
                 
-                # Кнопка вибору
                 if st.button(
                     T['btn_selected'] if is_sel else T['btn_select'],
                     key=f"btn_{fname}",
@@ -340,7 +332,6 @@ with c_left:
                     futures = {}
                     for i, fname in enumerate(process_list):
                         fpath = files_map[fname]
-                        # Генеруємо нове ім'я
                         new_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), i+1)
                         
                         future = executor.submit(engine.process_image, fpath, new_fname, wm_obj, resize_cfg, out_fmt, quality)
@@ -370,7 +361,6 @@ with c_left:
 
 with c_right:
     st.subheader(T['prev_header'])
-    # Preview Logic
     selected_list = list(st.session_state['selected_files'])
     target_file = selected_list[-1] if selected_list else None
     
@@ -378,7 +368,6 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
-            # Live render
             wm_bytes = wm_file.getvalue() if wm_file else None
             wm_obj = None
             if wm_bytes:
@@ -393,7 +382,6 @@ with c_right:
             }
             
             try:
-                # Preview генеруємо "на льоту" з тимчасового файлу
                 prev_bytes, stats = engine.process_image(fpath, "preview", wm_obj, resize_cfg, out_fmt, quality)
                 st.image(prev_bytes, caption=f"Preview: {stats['new_res']}", use_container_width=True)
                 st.caption(f"Size: {stats['new_size']/1024:.0f} KB ({stats['scale_factor']})")
