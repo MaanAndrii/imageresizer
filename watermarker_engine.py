@@ -7,12 +7,10 @@ from PIL import Image, ImageEnhance, ImageOps
 from translitua import translit
 
 """
-Watermarker Pro Engine v4.9 (Stable Core)
------------------------------------------
-Updates:
-- Added get_thumbnail() for Grid View
-- Switched to path-based processing (TempFile)
-- Fixed EXIF handling
+Watermarker Pro Engine v4.9.1 (Anti-Flicker)
+--------------------------------------------
+Fix: get_thumbnail now returns file path (str) instead of PIL Object.
+This allows browser caching and eliminates UI jittering.
 """
 
 # === CONFIG ===
@@ -41,35 +39,31 @@ def generate_filename(original_path: str, naming_mode: str, prefix: str = "", ex
     base = f"{clean_prefix}_{slug}" if clean_prefix else slug
     return f"{base}.{extension}"
 
-def get_thumbnail(file_path: str, size=(300, 300)) -> Image.Image:
+def get_thumbnail(file_path: str, size=(300, 300)) -> str:
     """
-    Створює мініатюру.
-    Для оптимізації зберігає кеш-файл .thumb поруч з оригіналом.
+    Створює мініатюру та повертає ШЛЯХ до неї (для кешування браузером).
     """
-    thumb_path = f"{file_path}.thumb"
+    thumb_path = f"{file_path}.thumb.jpg" # Явне розширення для коректної роботи st.image
     
-    # Якщо мініатюра вже є - повертаємо її
+    # Якщо файл існує - просто повертаємо шлях (миттєво)
     if os.path.exists(thumb_path):
-        try:
-            return Image.open(thumb_path)
-        except:
-            pass # Якщо бита, перестворюємо
+        return thumb_path
             
     try:
         with Image.open(file_path) as img:
-            # Конвертуємо в RGB для сумісності (наприклад, якщо CMYK)
+            # Конвертуємо в RGB
             img = img.convert('RGB')
-            # Smart crop або thumbnail
+            # Робимо ресайз
             img.thumbnail(size)
-            # Зберігаємо кеш
-            img.save(thumb_path, "JPEG", quality=60)
-            return img
+            # Зберігаємо на диск
+            img.save(thumb_path, "JPEG", quality=70)
+            return thumb_path
     except Exception as e:
         print(f"Thumb error: {e}")
         return None
 
 def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Image:
-    """Завантажує та готує зображення водяного знаку (залишається в RAM, бо мале)."""
+    """Завантажує та готує зображення водяного знаку."""
     if not wm_file_bytes:
         return None
     try:
@@ -86,9 +80,8 @@ def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Im
         raise ValueError(f"Failed to load watermark: {str(e)}")
 
 def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int) -> tuple:
-    """Основна функція обробки. Приймає шлях до файлу."""
+    """Основна функція обробки."""
     
-    # Використовуємо контекстний менеджер для автоматичного закриття файлу
     with Image.open(file_path) as img:
         orig_w, orig_h = img.size
         orig_size = os.path.getsize(file_path)
