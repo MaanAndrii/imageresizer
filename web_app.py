@@ -13,7 +13,7 @@ import watermarker_engine as engine
 # --- КОНФІГУРАЦІЯ ---
 st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
 
-# Дефолтні налаштування (для скидання)
+# Дефолтні налаштування
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
     'wm_pos': 'bottom-right',
@@ -24,20 +24,8 @@ DEFAULT_SETTINGS = {
     'wm_angle': 0
 }
 
-# Спеціальні налаштування для режимів
-TILED_SETTINGS = {
-    'wm_scale': 15, 
-    'wm_opacity': 0.3, # Напівпрозорість для паттерну
-    'wm_gap': 30, 
-    'wm_angle': 45     # Діагональ
-}
-
-CORNER_SETTINGS = {
-    'wm_scale': 15, 
-    'wm_opacity': 1.0, # Повна видимість для кута
-    'wm_margin': 15, 
-    'wm_angle': 0
-}
+TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 45}
+CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle': 0}
 
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
@@ -89,6 +77,9 @@ TRANSLATIONS = {
         
         "prev_header": "👁️ Живий перегляд",
         "prev_placeholder": "Оберіть файл (✅) для перегляду",
+        "stat_res": "Роздільна здатність",
+        "stat_size": "Розмір файлу",
+        
         "grid_select_all": "✅ Обрати всі",
         "grid_deselect_all": "⬜ Зняти всі",
         "grid_delete": "🗑️ Видалити",
@@ -104,7 +95,7 @@ TRANSLATIONS = {
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Повна українізація інтерфейсу\n- 🔄 Авто-налаштування для Tiled/Corner\n- 🎨 Новий дизайн заглушки прев'ю"
+        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Повна українізація інтерфейсу\n- 📊 Повернуто метрики файлів\n- 🎨 Новий дизайн заглушки прев'ю"
     },
     "en": {
         "title": "📸 Watermarker Pro v4.9",
@@ -154,6 +145,9 @@ TRANSLATIONS = {
         
         "prev_header": "👁️ Live Preview",
         "prev_placeholder": "Select a file (✅) to preview",
+        "stat_res": "Resolution",
+        "stat_size": "File Size",
+        
         "grid_select_all": "✅ Select All",
         "grid_deselect_all": "⬜ Deselect All",
         "grid_delete": "🗑️ Delete",
@@ -169,7 +163,7 @@ TRANSLATIONS = {
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Full UI Localization\n- 🔄 Auto-settings for Tiled/Corner\n- 🎨 New Preview Placeholder"
+        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Full UI Localization\n- 📊 Restored file metrics\n- 🎨 New Preview Placeholder"
     }
 }
 
@@ -245,8 +239,6 @@ if 'wm_gap_key' not in st.session_state:
 
 # --- CALLBACK: AUTO-SETTINGS ---
 def handle_pos_change():
-    """Автоматично змінює параметри при зміні позиції"""
-    # Значення в session_state вже оновлено на нове
     if st.session_state['wm_pos_key'] == 'tiled':
         st.session_state['wm_scale_key'] = TILED_SETTINGS['wm_scale']
         st.session_state['wm_opacity_key'] = TILED_SETTINGS['wm_opacity']
@@ -495,14 +487,26 @@ with c_right:
             }
             
             try:
-                # Генеруємо реальне ім'я для прев'ю, щоб показати користувачу
+                # Генеруємо реальне ім'я для прев'ю
                 preview_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), 1)
                 
                 prev_bytes, stats = engine.process_image(fpath, preview_fname, wm_obj, resize_cfg, out_fmt, quality)
                 
-                # Відображаємо: Картинка -> Підпис: Ім'я файлу | Розширення
-                st.image(prev_bytes, caption=f"{stats['filename']} | {stats['new_res']}", use_container_width=True)
-                st.caption(f"Size: {stats['new_size']/1024:.0f} KB ({stats['scale_factor']})")
+                # --- ПОКРАЩЕНЕ ПРЕВ'Ю ---
+                st.image(prev_bytes, caption=f"{stats['filename']}", use_container_width=True)
+                
+                # Метрики з дельтою
+                m1, m2 = st.columns(2)
+                delta_size = ((stats['new_size'] - stats['orig_size']) / stats['orig_size']) * 100
+                
+                m1.metric(T['stat_res'], stats['new_res'], stats['scale_factor'])
+                m2.metric(
+                    T['stat_size'], 
+                    f"{stats['new_size']/1024:.1f} KB", 
+                    f"{delta_size:.1f}%", 
+                    delta_color="inverse"
+                )
+                
             except Exception as e:
                 st.error(f"Preview Error: {e}")
         else:
