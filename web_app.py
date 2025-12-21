@@ -13,7 +13,7 @@ import watermarker_engine as engine
 # --- КОНФІГУРАЦІЯ ---
 st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
 
-# Дефолтні налаштування
+# Дефолтні налаштування (для скидання)
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
     'wm_pos': 'bottom-right',
@@ -24,8 +24,20 @@ DEFAULT_SETTINGS = {
     'wm_angle': 0
 }
 
-TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 45}
-CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle': 0}
+# Спеціальні налаштування для режимів
+TILED_SETTINGS = {
+    'wm_scale': 15, 
+    'wm_opacity': 0.3, # Напівпрозорість для паттерну
+    'wm_gap': 30, 
+    'wm_angle': 45     # Діагональ
+}
+
+CORNER_SETTINGS = {
+    'wm_scale': 15, 
+    'wm_opacity': 1.0, # Повна видимість для кута
+    'wm_margin': 15, 
+    'wm_angle': 0
+}
 
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
@@ -64,6 +76,7 @@ TRANSLATIONS = {
         "lbl_gap": "Проміжок (px)",
         "lbl_margin": "Відступ (px)",
         "lbl_angle": "Кут нахилу (°)",
+        "warn_scale": "⚠️ Логотип занадто великий! Це перекриє фото.",
         
         "files_header": "📂 Робоча область", 
         "uploader_label": "Завантажити фото",
@@ -91,7 +104,7 @@ TRANSLATIONS = {
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Повна українізація інтерфейсу\n- 🎨 Новий дизайн заглушки прев'ю\n- 👁️ Відображення імені файлу"
+        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Повна українізація інтерфейсу\n- 🔄 Авто-налаштування для Tiled/Corner\n- 🎨 Новий дизайн заглушки прев'ю"
     },
     "en": {
         "title": "📸 Watermarker Pro v4.9",
@@ -128,6 +141,7 @@ TRANSLATIONS = {
         "lbl_gap": "Gap (px)",
         "lbl_margin": "Margin (px)",
         "lbl_angle": "Angle (°)",
+        "warn_scale": "⚠️ Logo is too large! It may cover the photo.",
         
         "files_header": "📂 Workspace", 
         "uploader_label": "Upload Photos",
@@ -155,7 +169,7 @@ TRANSLATIONS = {
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Full UI Localization\n- 🎨 New Preview Placeholder\n- 👁️ Filename in Preview"
+        "about_changelog": "**v4.9 UI Update:**\n- 🇺🇦 Full UI Localization\n- 🔄 Auto-settings for Tiled/Corner\n- 🎨 New Preview Placeholder"
     }
 }
 
@@ -229,7 +243,10 @@ for k, v in DEFAULT_SETTINGS.items():
 if 'wm_gap_key' not in st.session_state:
     st.session_state['wm_gap_key'] = DEFAULT_SETTINGS['wm_gap']
 
+# --- CALLBACK: AUTO-SETTINGS ---
 def handle_pos_change():
+    """Автоматично змінює параметри при зміні позиції"""
+    # Значення в session_state вже оновлено на нове
     if st.session_state['wm_pos_key'] == 'tiled':
         st.session_state['wm_scale_key'] = TILED_SETTINGS['wm_scale']
         st.session_state['wm_opacity_key'] = TILED_SETTINGS['wm_opacity']
@@ -289,9 +306,16 @@ with st.sidebar:
 
     with st.expander(T['sec_wm'], expanded=True):
         wm_file = st.file_uploader(T['lbl_logo'], type=["png"])
+        
+        # KEY: Виклик handle_pos_change при зміні
         wm_pos = st.selectbox(T['lbl_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], 
                               key='wm_pos_key', on_change=handle_pos_change, format_func=format_pos)
+        
         wm_scale = st.slider(T['lbl_scale'], 5, 80, key='wm_scale_key') / 100
+        # Попередження про масштаб
+        if wm_scale > 0.5 and wm_pos != 'tiled':
+            st.warning(T['warn_scale'])
+
         wm_opacity = st.slider(T['lbl_opacity'], 0.1, 1.0, key='wm_opacity_key')
         
         if wm_pos == 'tiled':
