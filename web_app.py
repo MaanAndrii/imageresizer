@@ -5,6 +5,7 @@ import zipfile
 import concurrent.futures
 from datetime import datetime
 import watermarker_engine as engine
+from gallery_component import render_gallery, generate_thumbnail
 
 # --- КОНФІГУРАЦІЯ ---
 st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="wide")
@@ -12,7 +13,7 @@ st.set_page_config(page_title="Watermarker Pro MaAn", page_icon="📸", layout="
 # Максимальний розмір файлу (MB)
 MAX_FILE_SIZE_MB = 50
 
-# Дефолтні налаштування (винесені в константу)
+# Дефолтні налаштування
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
     'wm_pos': 'bottom-right',
@@ -37,14 +38,12 @@ CORNER_SETTINGS = {
     'wm_angle': 0
 }
 
-# ==========================================
-# 🌐 ЛОКАЛІЗАЦІЯ (БЕЗ РОСІЙСЬКОЇ)
-# ==========================================
+# ЛОКАЛІЗАЦІЯ
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v4.7",
+        "title": "📸 Watermarker Pro v4.8",
         "lang_select": "Мова / Language",
-        "sb_config": "🛠 Налаштування",
+        "sb_config": "�  Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
         "sec_file": "1. Файл та Ім'я",
@@ -61,7 +60,7 @@ TRANSLATIONS = {
         "lbl_presets": "Швидкі пресети:",
         
         "lbl_wm_upload": "Завантажити лого (PNG)", 
-        "lbl_wm_pos": "Позиція", 
+        "lbl_wm_pos": "Позіція", 
         "lbl_wm_scale": "Масштаб (%)", 
         "lbl_wm_opacity": "Прозорість", 
         "lbl_wm_margin_edge": "Відступ від краю (px)", 
@@ -71,8 +70,6 @@ TRANSLATIONS = {
         
         "files_header": "📂 Робоча область", 
         "uploader_label": "Файли", 
-        "tbl_select": "✅", 
-        "tbl_name": "Файл",
         "btn_delete": "🗑️ Видалити", 
         "btn_reset": "♻️ Очистити список", 
         "btn_process": "🚀 Обробити", 
@@ -80,6 +77,7 @@ TRANSLATIONS = {
         "error_file_size": "❌ Файл {} завеликий! Максимум {} MB",
         "error_corrupted": "❌ Файл {} пошкоджений або невалідний",
         "error_wm_load": "❌ Помилка завантаження логотипу: {}",
+        "info_no_selection": "Оберіть файли в галереї для обробки",
         
         "res_savings": "Економія", 
         "btn_dl_zip": "📦 Скачати ZIP", 
@@ -90,17 +88,17 @@ TRANSLATIONS = {
         "prev_rendering": "Генерація...", 
         "prev_size": "Розмір", 
         "prev_weight": "Вага", 
-        "prev_info": "Оберіть файл (✅) для тесту.",
+        "prev_info": "Клікніть на зображення в галереї для перегляду.",
         
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.7", 
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.8", 
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
-        "about_changelog": "**v4.7 Зміни:**\n- Виправлено діагональне замощення\n- Роздільні параметри margin/gap\n- Поворот для всіх режимів\n- Покращена валідація"
+        "about_changelog": "**v4.8 Зміни:**\n- 🎨 Нова галерея мініатюр\n- ⚡ Швидший вибір файлів\n- 👁️ Автоматичний preview\n- 🎯 Покращений UX"
     },
     "en": {
-        "title": "📸 Watermarker Pro v4.7",
+        "title": "📸 Watermarker Pro v4.8",
         "lang_select": "Language / Мова",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset to Defaults",
@@ -128,9 +126,7 @@ TRANSLATIONS = {
         "warn_large_scale": "⚠️ Logo too large, may cover the photo!",
         
         "files_header": "📂 Workspace", 
-        "uploader_label": "Files", 
-        "tbl_select": "✅", 
-        "tbl_name": "File",
+        "uploader_label": "Files",
         "btn_delete": "🗑️ Delete", 
         "btn_reset": "♻️ Clear List", 
         "btn_process": "🚀 Process", 
@@ -138,6 +134,7 @@ TRANSLATIONS = {
         "error_file_size": "❌ File {} is too large! Max {} MB",
         "error_corrupted": "❌ File {} is corrupted or invalid",
         "error_wm_load": "❌ Failed to load watermark: {}",
+        "info_no_selection": "Select files in gallery to process",
         
         "res_savings": "Savings", 
         "btn_dl_zip": "📦 Download ZIP", 
@@ -148,14 +145,14 @@ TRANSLATIONS = {
         "prev_rendering": "Rendering...", 
         "prev_size": "Dimensions", 
         "prev_weight": "Weight", 
-        "prev_info": "Select a file (✅) to preview.",
+        "prev_info": "Click on an image in gallery to preview.",
         
-        "about_prod": "**Product:** Watermarker Pro MaAn v4.7", 
+        "about_prod": "**Product:** Watermarker Pro MaAn v4.8", 
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
-        "about_changelog": "**v4.7 Changes:**\n- Fixed diagonal tiling\n- Separate margin/gap params\n- Rotation for all modes\n- Better validation"
+        "about_changelog": "**v4.8 Changes:**\n- 🎨 New thumbnail gallery\n- ⚡ Faster file selection\n- 👁️ Auto preview\n- 🎯 Improved UX"
     }
 }
 
@@ -204,13 +201,11 @@ def handle_pos_change():
     new_pos = st.session_state['wm_pos_key']
     
     if new_pos == 'tiled':
-        # Налаштування для ЗАМОЩЕННЯ
         st.session_state['wm_scale_key'] = TILED_SETTINGS['wm_scale']
         st.session_state['wm_opacity_key'] = TILED_SETTINGS['wm_opacity']
         st.session_state['wm_gap_key'] = TILED_SETTINGS['wm_gap']
         st.session_state['wm_angle_key'] = TILED_SETTINGS['wm_angle']
     else:
-        # Налаштування для КУТІВ
         st.session_state['wm_scale_key'] = CORNER_SETTINGS['wm_scale']
         st.session_state['wm_opacity_key'] = CORNER_SETTINGS['wm_opacity']
         st.session_state['wm_margin_key'] = CORNER_SETTINGS['wm_margin']
@@ -233,6 +228,10 @@ if 'uploader_key' not in st.session_state:
     st.session_state['uploader_key'] = 0
 if 'lang_code' not in st.session_state: 
     st.session_state['lang_code'] = 'ua'
+if 'selected_files' not in st.session_state:
+    st.session_state['selected_files'] = set()
+if 'preview_file' not in st.session_state:
+    st.session_state['preview_file'] = None
 
 # Початкова ініціалізація
 for k, v in DEFAULT_SETTINGS.items():
@@ -240,7 +239,6 @@ for k, v in DEFAULT_SETTINGS.items():
     if key_name not in st.session_state: 
         st.session_state[key_name] = v
 
-# Додаємо gap до ініціалізації
 if 'wm_gap_key' not in st.session_state:
     st.session_state['wm_gap_key'] = DEFAULT_SETTINGS['wm_gap']
 
@@ -292,7 +290,6 @@ with st.sidebar:
     with st.expander(T['sec_wm'], expanded=True):
         wm_file = st.file_uploader(T['lbl_wm_upload'], type=["png"])
         
-        # ВИБІР ПОЗИЦІЇ З CALLBACK
         wm_pos = st.selectbox(
             T['lbl_wm_pos'], 
             ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], 
@@ -307,7 +304,6 @@ with st.sidebar:
             key='wm_scale_key'
         ) / 100
         
-        # Попередження про великий масштаб
         if wm_scale > 0.5 and wm_pos != 'tiled':
             st.warning(T['warn_large_scale'])
         
@@ -318,23 +314,21 @@ with st.sidebar:
             step=0.05
         )
         
-        # Окремі параметри для різних режимів
         if wm_pos == 'tiled':
             wm_gap = st.slider(
                 T['lbl_wm_gap'], 
                 0, 200, 
                 key='wm_gap_key'
             )
-            wm_margin = wm_gap  # Для бекенду
+            wm_margin = wm_gap
         else:
             wm_margin = st.slider(
                 T['lbl_wm_margin_edge'], 
                 0, 100, 
                 key='wm_margin_key'
             )
-            wm_gap = 0  # Для бекенду
+            wm_gap = 0
         
-        # Кут доступний для всіх режимів
         wm_angle = st.slider(
             T['lbl_wm_angle'], 
             -180, 180, 
@@ -355,7 +349,6 @@ with st.sidebar:
             st.markdown(T['about_changelog'])
 
     st.divider()
-    # ТІЛЬКИ УКРАЇНСЬКА І АНГЛІЙСЬКА
     current_idx = 0 if st.session_state['lang_code'] == 'ua' else 1
     selected_lang = st.selectbox(
         T['lang_select'], 
@@ -372,6 +365,8 @@ c_left, c_right = st.columns([1.5, 1], gap="large")
 
 with c_left:
     st.subheader(T['files_header'])
+    
+    # Upload область
     uploaded = st.file_uploader(
         T['uploader_label'], 
         type=['png', 'jpg', 'jpeg', 'webp'], 
@@ -382,7 +377,6 @@ with c_left:
     
     if uploaded:
         for f in uploaded:
-            # Валідація розміру файлу
             file_size_mb = len(f.getvalue()) / (1024 * 1024)
             if file_size_mb > MAX_FILE_SIZE_MB:
                 st.error(T['error_file_size'].format(f.name, MAX_FILE_SIZE_MB))
@@ -395,140 +389,127 @@ with c_left:
         st.rerun()
 
     files_map = st.session_state['file_cache']
-    files_names = list(files_map.keys())
     
-    if files_names:
-        table_data = []
-        corrupted_files = []
-        
-        for fname in files_names:
-            fbytes = files_map[fname]
-            w, h, size, fmt = ui_get_metadata(fbytes)
-            
-            # Валідація метаданих
-            if fmt is None:
-                corrupted_files.append(fname)
-                table_data.append({
-                    "Select": False, 
-                    "Name": f"❌ {fname}", 
-                    "Size": f"{size/1024:.1f} KB", 
-                    "Res": "ERROR", 
-                    "Fmt": "INVALID"
-                })
-            else:
-                table_data.append({
-                    "Select": False, 
-                    "Name": fname, 
-                    "Size": f"{size/1024:.1f} KB", 
-                    "Res": f"{w}x{h}", 
-                    "Fmt": fmt
-                })
-        
-        # Показуємо попередження про пошкоджені файли
-        if corrupted_files:
-            for cf in corrupted_files:
-                st.error(T['error_corrupted'].format(cf))
-            
-        df = pd.DataFrame(table_data)
-        edited_df = st.data_editor(
-            df, 
-            column_config={
-                "Select": st.column_config.CheckboxColumn(T['tbl_select'], default=False), 
-                "Name": st.column_config.TextColumn(T['tbl_name'], disabled=True)
-            }, 
-            hide_index=True, 
-            use_container_width=True, 
-            key="editor_in"
+    if files_map:
+        # Рендер галереї
+        selected, clicked = render_gallery(
+            files_map, 
+            st.session_state['selected_files'],
+            key="main_gallery"
         )
         
-        selected_files = edited_df[edited_df["Select"] == True]["Name"].tolist()
-        # Видаляємо ❌ prefix для corrupted files
-        selected_files = [f.replace("❌ ", "") for f in selected_files]
-        preview_target = selected_files[-1] if selected_files else None
-
+        # Оновлення стану
+        if selected != st.session_state['selected_files']:
+            st.session_state['selected_files'] = selected
+            st.rerun()
+        
+        if clicked and clicked != st.session_state.get('preview_file'):
+            st.session_state['preview_file'] = clicked
+            st.rerun()
+        
+        st.divider()
+        
+        # Кнопки дій
         act1, act2, act3 = st.columns([1, 1, 1.5])
+        
+        selected_list = list(st.session_state['selected_files'])
+        
         with act1:
-            if st.button(T['btn_delete'], disabled=not selected_files, use_container_width=True):
-                for fn in selected_files: 
+            if st.button(
+                f"{T['btn_delete']} ({len(selected_list)})", 
+                disabled=len(selected_list) == 0, 
+                use_container_width=True
+            ):
+                for fn in selected_list: 
                     del st.session_state['file_cache'][fn]
+                st.session_state['selected_files'] = set()
+                st.session_state['preview_file'] = None
                 st.rerun()
+        
         with act2:
             if st.button(T['btn_reset'], use_container_width=True):
                 st.session_state['file_cache'] = {}
+                st.session_state['selected_files'] = set()
+                st.session_state['preview_file'] = None
                 st.session_state['results'] = None
                 st.rerun()
+        
         with act3:
-            # Забороняємо обробку якщо є пошкоджені файли
-            can_process = len(corrupted_files) == 0 and len(files_names) > 0
+            # Обробка тільки вибраних файлів
+            files_to_process = {k: v for k, v in files_map.items() if k in selected_list}
+            
             if st.button(
-                f"{T['btn_process']} ({len(files_names)})", 
+                f"{T['btn_process']} ({len(files_to_process)})", 
                 type="primary", 
                 use_container_width=True,
-                disabled=not can_process
+                disabled=len(files_to_process) == 0
             ):
-                progress_bar = st.progress(0)
-                
-                # Валідація вотермарки
-                wm_bytes = wm_file.getvalue() if wm_file else None
-                wm_cached_obj = None
-                
-                if wm_bytes:
-                    try:
-                        wm_cached_obj = ui_load_watermark(wm_bytes, wm_opacity)
-                    except ValueError as e:
-                        st.error(T['error_wm_load'].format(str(e)))
-                        st.stop()
-                
-                resize_cfg = {
-                    'enabled': resize_on, 
-                    'mode': resize_mode, 
-                    'value': resize_val, 
-                    'wm_scale': wm_scale, 
-                    'wm_margin': wm_margin if wm_pos != 'tiled' else 0,
-                    'wm_gap': wm_gap if wm_pos == 'tiled' else 0,
-                    'wm_position': wm_pos, 
-                    'wm_angle': wm_angle
-                }
-                
-                results_list = []
-                report_list = []
-                zip_buffer = io.BytesIO()
-                total_files = len(files_names)
-                
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    futures = {}
-                    for i, fname in enumerate(files_names):
-                        fbytes = files_map[fname]
-                        ext = out_fmt.lower()
-                        new_fname = engine.generate_filename(
-                            fname, naming_mode, prefix, ext, 
-                            index=i+1, file_bytes=fbytes
-                        )
-                        future = executor.submit(
-                            engine.process_image, 
-                            fbytes, new_fname, wm_cached_obj, 
-                            resize_cfg, out_fmt, quality
-                        )
-                        futures[future] = fname
+                if len(files_to_process) == 0:
+                    st.warning(T['info_no_selection'])
+                else:
+                    progress_bar = st.progress(0)
+                    
+                    wm_bytes = wm_file.getvalue() if wm_file else None
+                    wm_cached_obj = None
+                    
+                    if wm_bytes:
+                        try:
+                            wm_cached_obj = ui_load_watermark(wm_bytes, wm_opacity)
+                        except ValueError as e:
+                            st.error(T['error_wm_load'].format(str(e)))
+                            st.stop()
+                    
+                    resize_cfg = {
+                        'enabled': resize_on, 
+                        'mode': resize_mode, 
+                        'value': resize_val, 
+                        'wm_scale': wm_scale, 
+                        'wm_margin': wm_margin if wm_pos != 'tiled' else 0,
+                        'wm_gap': wm_gap if wm_pos == 'tiled' else 0,
+                        'wm_position': wm_pos, 
+                        'wm_angle': wm_angle
+                    }
+                    
+                    results_list = []
+                    report_list = []
+                    zip_buffer = io.BytesIO()
+                    total_files = len(files_to_process)
+                    
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        futures = {}
+                        for i, (fname, fbytes) in enumerate(files_to_process.items()):
+                            ext = out_fmt.lower()
+                            new_fname = engine.generate_filename(
+                                fname, naming_mode, prefix, ext, 
+                                index=i+1, file_bytes=fbytes
+                            )
+                            future = executor.submit(
+                                engine.process_image, 
+                                fbytes, new_fname, wm_cached_obj, 
+                                resize_cfg, out_fmt, quality
+                            )
+                            futures[future] = fname
 
-                    with zipfile.ZipFile(zip_buffer, "w") as zf:
-                        for i, future in enumerate(concurrent.futures.as_completed(futures)):
-                            try:
-                                res_bytes, stats = future.result()
-                                zf.writestr(stats['filename'], res_bytes)
-                                results_list.append((stats['filename'], res_bytes))
-                                report_list.append(stats)
-                            except Exception as e: 
-                                st.error(f"Error processing {futures[future]}: {e}")
-                            progress_bar.progress((i + 1) / total_files)
+                        with zipfile.ZipFile(zip_buffer, "w") as zf:
+                            for i, future in enumerate(concurrent.futures.as_completed(futures)):
+                                try:
+                                    res_bytes, stats = future.result()
+                                    zf.writestr(stats['filename'], res_bytes)
+                                    results_list.append((stats['filename'], res_bytes))
+                                    report_list.append(stats)
+                                except Exception as e: 
+                                    st.error(f"Error processing {futures[future]}: {e}")
+                                progress_bar.progress((i + 1) / total_files)
 
-                st.toast(T['msg_done'], icon='🎉')
-                st.session_state['results'] = {
-                    'zip': zip_buffer.getvalue(), 
-                    'files': results_list, 
-                    'report': report_list
-                }
+                    st.toast(T['msg_done'], icon='🎉')
+                    st.session_state['results'] = {
+                        'zip': zip_buffer.getvalue(), 
+                        'files': results_list, 
+                        'report': report_list
+                    }
+                    st.rerun()
 
+    # Результати
     if 'results' in st.session_state and st.session_state['results']:
         res = st.session_state['results']
         report = res['report']
@@ -571,10 +552,11 @@ with c_left:
 with c_right:
     st.subheader(T['prev_header'])
     with st.container(border=True):
-        if 'preview_target' in locals() and preview_target:
+        preview_target = st.session_state.get('preview_file')
+        
+        if preview_target and preview_target in files_map:
             raw_bytes = files_map[preview_target]
             
-            # Валідація preview
             w, h, size, fmt = ui_get_metadata(raw_bytes)
             if fmt is None:
                 st.error(T['error_corrupted'].format(preview_target))
@@ -623,4 +605,4 @@ with c_right:
                     st.error(f"Preview Error: {e}")
         else:
             st.info(T['prev_info'])
-            st.markdown('<div style="height:300px; background:#f0f2f6;"></div>', unsafe_allow_html=True)
+            st.markdown('<div style="height:300px; background:#f0f2f6; border-radius:8px;"></div>', unsafe_allow_html=True)
