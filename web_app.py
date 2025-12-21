@@ -94,7 +94,8 @@ TRANSLATIONS = {
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v5.1 UI Update:**\n- 🧹 Кнопка повного очищення\n- 📦 Компактний режим завантаження\n- ⚡ Покращений UX робочої області"
+        "about_changelog": "**v5.1 UI Update:**\n- 🧹 Кнопка повного очищення\n- 📦 Компактний режим завантаження\n- ⚡ Покращений UX робочої області",
+        "lang_select": "Мова інтерфейсу / Interface Language" # ПОВЕРНУТО
     },
     "en": {
         "title": "📸 Watermarker Pro v5.1",
@@ -159,7 +160,8 @@ TRANSLATIONS = {
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v5.1 UI Update:**\n- 🧹 Clear Workspace Button\n- 📦 Compact Uploader Mode\n- ⚡ Improved Workspace UX"
+        "about_changelog": "**v5.1 UI Update:**\n- 🧹 Clear Workspace Button\n- 📦 Compact Uploader Mode\n- ⚡ Improved Workspace UX",
+        "lang_select": "Interface Language / Мова інтерфейсу" # RESTORED
     }
 }
 
@@ -320,25 +322,21 @@ st.title(T['title'])
 c_left, c_right = st.columns([1.8, 1], gap="large")
 
 with c_left:
-    # --- HEADER + CLEAR BUTTON ---
     col_head, col_clear = st.columns([2, 1])
     with col_head:
         st.subheader(T['files_header'])
     with col_clear:
-        # Кнопка Очистити все
         if st.button(T['btn_clear_workspace'], type="secondary", use_container_width=True):
             st.session_state['file_cache'] = {}
             st.session_state['selected_files'] = set()
-            st.session_state['uploader_key'] += 1 # Reset uploader
+            st.session_state['uploader_key'] += 1
             st.session_state['results'] = None
             if os.path.exists(st.session_state['temp_dir']):
                 shutil.rmtree(st.session_state['temp_dir'])
                 st.session_state['temp_dir'] = tempfile.mkdtemp(prefix="wm_pro_")
             st.rerun()
     
-    # --- COMPACT UPLOADER (EXPANDER) ---
     has_files = len(st.session_state['file_cache']) > 0
-    # Якщо файли є - згортаємо, якщо ні - розгортаємо
     with st.expander(T['expander_add_files'], expanded=not has_files):
         uploaded = st.file_uploader(T['uploader_label'], type=['jpg','jpeg','png','webp'], accept_multiple_files=True, label_visibility="collapsed", key=f"up_{st.session_state['uploader_key']}")
     
