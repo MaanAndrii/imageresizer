@@ -43,6 +43,7 @@ TRANSLATIONS = {
         "error_wm_load": "❌ Помилка логотипу: {}",
         "res_savings": "Економія", 
         "btn_dl_zip": "📦 Скачати ZIP",
+        "exp_dl_separate": "⬇️ Скачати окремо", # Повернуто
         "prev_header": "👁️ Живий перегляд",
         "grid_select_all": "✅ Обрати всі",
         "grid_deselect_all": "⬜ Зняти всі",
@@ -51,7 +52,14 @@ TRANSLATIONS = {
         "btn_select": "⬜ Обрати",
         "warn_no_files": "⚠️ Спочатку оберіть файли для обробки!",
         "lang_select": "Мова / Language",
-        "about_prod": "**Watermarker Pro MaAn v4.8**\n\nStable Core Update (TempFile + Grid)\n\n© 2025 Maryniuk Andrii",
+        # About Section
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v4.8", 
+        "about_auth": "**Автор:** Marynyuk Andriy", 
+        "about_lic": "**Ліцензія:** Proprietary", 
+        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
+        "about_copy": "© 2025 Всі права захищено",
+        "about_changelog_title": "📝 Історія змін",
+        "about_changelog": "**v4.8 Stable Core:**\n- ⚡ Оптимізація пам'яті (TempFile)\n- 🖼️ Новий режим галереї (Grid View)\n- 🚀 Швидкі мініатюри\n- ⬇️ Пофайлове завантаження"
     },
     "en": {
         "title": "📸 Watermarker Pro v4.8",
@@ -67,6 +75,7 @@ TRANSLATIONS = {
         "error_wm_load": "❌ Logo error: {}",
         "res_savings": "Savings", 
         "btn_dl_zip": "📦 Download ZIP",
+        "exp_dl_separate": "⬇️ Download Separate", # Returned
         "prev_header": "👁️ Live Preview",
         "grid_select_all": "✅ Select All",
         "grid_deselect_all": "⬜ Deselect All",
@@ -75,7 +84,14 @@ TRANSLATIONS = {
         "btn_select": "⬜ Select",
         "warn_no_files": "⚠️ Please select files first!",
         "lang_select": "Language / Мова",
-        "about_prod": "**Watermarker Pro MaAn v4.8**\n\nStable Core Update (TempFile + Grid)\n\n© 2025 Maryniuk Andrii",
+        # About Section
+        "about_prod": "**Product:** Watermarker Pro MaAn v4.8", 
+        "about_auth": "**Author:** Marynyuk Andriy", 
+        "about_lic": "**License:** Proprietary", 
+        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
+        "about_copy": "© 2025 All rights reserved",
+        "about_changelog_title": "📝 Changelog",
+        "about_changelog": "**v4.8 Stable Core:**\n- ⚡ Memory Optimization (TempFile)\n- 🖼️ New Grid View Gallery\n- 🚀 Fast Thumbnails\n- ⬇️ Per-file download"
     }
 }
 
@@ -208,10 +224,17 @@ with st.sidebar:
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
     # --- ABOUT & LANGUAGE SECTION ---
-    with st.expander("ℹ️ Info / Про програму", expanded=False):
+    with st.expander("ℹ️ About / Про програму", expanded=False):
         st.markdown(T['about_prod'])
-        st.divider()
+        st.markdown(T['about_auth'])
+        st.markdown(T['about_lic'])
+        st.markdown(T['about_repo'])
+        st.caption(T['about_copy'])
         
+        with st.expander(T['about_changelog_title']):
+            st.markdown(T['about_changelog'])
+            
+        st.divider()
         # Вибір мови
         sel_lang = st.selectbox(
             T['lang_select'], 
@@ -358,6 +381,13 @@ with c_left:
         
         with st.expander("Report"):
             st.dataframe(pd.DataFrame(res['report']))
+            
+        # --- БЛОК ПОФАЙЛОВОГО ЗАВАНТАЖЕННЯ (ВІДНОВЛЕНО) ---
+        with st.expander(T['exp_dl_separate']):
+            for name, data in res['files']:
+                c1, c2 = st.columns([3, 1])
+                c1.write(f"📄 {name}")
+                c2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
 
 with c_right:
     st.subheader(T['prev_header'])
