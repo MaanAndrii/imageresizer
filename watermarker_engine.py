@@ -1,16 +1,17 @@
 import io
 import os
 import re
-import hashlib
 from datetime import datetime
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageEnhance, ImageOps, ImageDraw, ImageFont
 from translitua import translit
 
 """
-Watermarker Pro Engine v4.9.1 (Anti-Flicker)
---------------------------------------------
-Fix: get_thumbnail now returns file path (str) instead of PIL Object.
-This allows browser caching and eliminates UI jittering.
+Watermarker Pro Engine v5.0 (Text & Metadata)
+---------------------------------------------
+Updates:
+- Added create_text_watermark() factory
+- Added EXIF Auto-Rotation (ImageOps.exif_transpose)
+- Improved Metadata preservation
 """
 
 # === CONFIG ===
@@ -24,7 +25,7 @@ DEFAULT_CONFIG = {
 }
 
 def generate_filename(original_path: str, naming_mode: str, prefix: str = "", extension: str = "jpg", index: int = 1) -> str:
-    """Генерує безпечне та унікальне ім'я файлу на основі шляху."""
+    """Генерує безпечне ім'я файлу."""
     original_name = os.path.basename(original_path)
     clean_prefix = re.sub(r'[\s\W_]+', '-', translit(prefix).lower()).strip('-') if prefix else ""
     
@@ -40,49 +41,79 @@ def generate_filename(original_path: str, naming_mode: str, prefix: str = "", ex
     return f"{base}.{extension}"
 
 def get_thumbnail(file_path: str, size=(300, 300)) -> str:
-    """
-    Створює мініатюру та повертає ШЛЯХ до неї (для кешування браузером).
-    """
-    thumb_path = f"{file_path}.thumb.jpg" # Явне розширення для коректної роботи st.image
-    
-    # Якщо файл існує - просто повертаємо шлях (миттєво)
+    """Створює мініатюру та повертає шлях (Anti-Flicker)."""
+    thumb_path = f"{file_path}.thumb.jpg"
     if os.path.exists(thumb_path):
         return thumb_path
             
     try:
         with Image.open(file_path) as img:
-            # Конвертуємо в RGB
+            img = ImageOps.exif_transpose(img) # Fix rotation for thumb too
             img = img.convert('RGB')
-            # Робимо ресайз
             img.thumbnail(size)
-            # Зберігаємо на диск
             img.save(thumb_path, "JPEG", quality=70)
             return thumb_path
     except Exception as e:
         print(f"Thumb error: {e}")
         return None
 
-def load_and_process_watermark(wm_file_bytes: bytes, opacity: float) -> Image.Image:
-    """Завантажує та готує зображення водяного знаку."""
-    if not wm_file_bytes:
-        return None
+def load_watermark_from_file(wm_file_bytes: bytes) -> Image.Image:
+    """Завантажує логотип з файлу."""
+    if not wm_file_bytes: return None
     try:
         wm = Image.open(io.BytesIO(wm_file_bytes)).convert("RGBA")
-        if wm.width < 10 or wm.height < 10:
-            raise ValueError("Watermark too small (min 10x10px)")
-        
-        if opacity < 1.0:
-            alpha = wm.split()[3]
-            alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
-            wm.putalpha(alpha)
         return wm
     except Exception as e:
-        raise ValueError(f"Failed to load watermark: {str(e)}")
+        raise ValueError(f"Failed to load logo: {str(e)}")
+
+def create_text_watermark(text: str, font_path: str, size_pt: int, color_hex: str) -> Image.Image:
+    """Генерує зображення вотермарки з тексту."""
+    if not text: return None
+    
+    # Створення прозорого полотна
+    # Спочатку пробуємо завантажити шрифт, інакше дефолтний
+    try:
+        font = ImageFont.truetype(font_path, size_pt) if font_path else ImageFont.load_default()
+    except:
+        font = ImageFont.load_default()
+        
+    # Розрахунок розміру тексту
+    dummy_draw = ImageDraw.Draw(Image.new('RGBA', (1, 1)))
+    bbox = dummy_draw.textbbox((0, 0), text, font=font)
+    w = bbox[2] - bbox[0]
+    h = bbox[3] - bbox[1]
+    
+    # Додаємо трохи відступів, щоб літери не обрізались
+    wm = Image.new('RGBA', (w + 20, h + 20), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(wm)
+    
+    # Конвертація HEX кольору в RGB
+    color = color_hex.lstrip('#')
+    rgb = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+    
+    # Малюємо текст (Alpha поки 255, прозорість додасться пізніше в загальній логіці)
+    draw.text((10, 10), text, font=font, fill=rgb + (255,))
+    
+    return wm
+
+def apply_opacity(image: Image.Image, opacity: float) -> Image.Image:
+    """Застосовує прозорість до будь-якого RGBA зображення (текст або лого)."""
+    if opacity >= 1.0: return image
+    alpha = image.split()[3]
+    alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+    image.putalpha(alpha)
+    return image
 
 def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int) -> tuple:
     """Основна функція обробки."""
     
     with Image.open(file_path) as img:
+        # 1. FIX EXIF ORIENTATION (Auto-Rotate)
+        img = ImageOps.exif_transpose(img)
+        
+        # Зберігаємо EXIF для запису в результат (якщо він зберігся після transpose)
+        exif_data = img.info.get('exif')
+        
         orig_w, orig_h = img.size
         orig_size = os.path.getsize(file_path)
         
@@ -120,10 +151,11 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
             position = resize_config.get('wm_position', DEFAULT_CONFIG['wm_position'])
             angle = resize_config.get('wm_angle', DEFAULT_CONFIG['wm_angle'])
             
-            if scale > 0.8: scale = 0.8
+            # Для текстових вотермарок scale працює як відносний розмір відносно фото
+            if scale > 0.9: scale = 0.9
             
             wm_w_target = int(new_w * scale)
-            if wm_w_target < 1: wm_w_target = 1
+            if wm_w_target < 10: wm_w_target = 10
             
             w_ratio = wm_w_target / float(wm_obj.width)
             wm_h_target = int(float(wm_obj.height) * w_ratio)
@@ -183,12 +215,16 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
         output_buffer = io.BytesIO()
         
         save_kwargs = {}
+        # Додаємо збереження EXIF
+        if exif_data:
+            save_kwargs['exif'] = exif_data
+
         if output_fmt == "JPEG":
-            save_kwargs = {"format": "JPEG", "quality": quality, "optimize": True, "subsampling": 0}
+            save_kwargs.update({"format": "JPEG", "quality": quality, "optimize": True, "subsampling": 0})
         elif output_fmt == "WEBP":
-            save_kwargs = {"format": "WEBP", "quality": quality, "method": 6}
+            save_kwargs.update({"format": "WEBP", "quality": quality, "method": 6})
         elif output_fmt == "PNG":
-            save_kwargs = {"format": "PNG", "optimize": True}
+            save_kwargs.update({"format": "PNG", "optimize": True})
 
         img.save(output_buffer, **save_kwargs)
         result_bytes = output_buffer.getvalue()
