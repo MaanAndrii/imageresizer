@@ -7,12 +7,12 @@ from PIL import Image, ImageEnhance, ImageOps
 from translitua import translit
 
 """
-Watermarker Pro Engine v4.8 (Stable Core)
+Watermarker Pro Engine v4.9 (Stable Core)
 -----------------------------------------
-Changelog:
-- Switched from In-Memory bytes to TempFile paths (OOM protection)
-- Added Thumbnail generation for Grid View
-- Optimized EXIF handling
+Updates:
+- Added get_thumbnail() for Grid View
+- Switched to path-based processing (TempFile)
+- Fixed EXIF handling
 """
 
 # === CONFIG ===
@@ -39,23 +39,7 @@ def generate_filename(original_path: str, naming_mode: str, prefix: str = "", ex
     if not slug: slug = "image"
     
     base = f"{clean_prefix}_{slug}" if clean_prefix else slug
-
-    if naming_mode == "Original + Suffix":
-        return f"{base}_wm.{extension}"
-    elif naming_mode == "Timestamp":
-        timestamp = datetime.now().strftime('%H%M%S_%f')[:9]
-        return f"{base}_{timestamp}.{extension}"
-    else: 
-        return f"{base}.{extension}"
-
-def get_image_metadata(file_path: str) -> tuple:
-    """Отримує метадані зображення з файлу на диску."""
-    try:
-        with Image.open(file_path) as img:
-            file_size = os.path.getsize(file_path)
-            return img.width, img.height, file_size, img.format
-    except Exception:
-        return 0, 0, 0, None
+    return f"{base}.{extension}"
 
 def get_thumbnail(file_path: str, size=(300, 300)) -> Image.Image:
     """
@@ -106,11 +90,7 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
     
     # Використовуємо контекстний менеджер для автоматичного закриття файлу
     with Image.open(file_path) as img:
-        # Збереження EXIF (поки що просте копіювання, якщо формат підтримує)
-        exif_dict = img.info.get('exif')
-        
         orig_w, orig_h = img.size
-        orig_format = img.format
         orig_size = os.path.getsize(file_path)
         
         img = img.convert("RGBA")
@@ -212,13 +192,10 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
         save_kwargs = {}
         if output_fmt == "JPEG":
             save_kwargs = {"format": "JPEG", "quality": quality, "optimize": True, "subsampling": 0}
-            if exif_dict: save_kwargs["exif"] = exif_dict
         elif output_fmt == "WEBP":
             save_kwargs = {"format": "WEBP", "quality": quality, "method": 6}
-            if exif_dict: save_kwargs["exif"] = exif_dict
         elif output_fmt == "PNG":
             save_kwargs = {"format": "PNG", "optimize": True}
-            if exif_dict: save_kwargs["exif"] = exif_dict
 
         img.save(output_buffer, **save_kwargs)
         result_bytes = output_buffer.getvalue()
@@ -229,9 +206,7 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
             "new_res": f"{new_w}x{new_h}",
             "orig_size": orig_size,
             "new_size": len(result_bytes),
-            "orig_fmt": orig_format or "Unknown",
-            "scale_factor": f"{scale_factor:.2f}x",
-            "quality": quality if output_fmt != "PNG" else "Lossless"
+            "scale_factor": f"{scale_factor:.2f}x"
         }
         
         return result_bytes, stats
