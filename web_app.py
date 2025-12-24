@@ -14,7 +14,7 @@ import watermarker_engine as engine
 import glob
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro v5.4", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.5", page_icon="📸", layout="wide")
 
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
@@ -25,7 +25,14 @@ DEFAULT_SETTINGS = {
     'wm_gap': 30,
     'wm_angle': 0,
     'wm_text': '',
-    'wm_text_color': '#FFFFFF'
+    'wm_text_color': '#FFFFFF',
+    # New defaults
+    'out_fmt': 'JPEG',
+    'out_quality': 80,
+    'naming_mode': 'Keep Original',
+    'naming_prefix': '',
+    'font_name': None,
+    'preset_wm_bytes': None # Кеш для логотипу з пресету
 }
 
 TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 45}
@@ -34,15 +41,14 @@ CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v5.4",
+        "title": "📸 Watermarker Pro v5.5",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
-        # Presets Section
         "sec_presets": "💾 Менеджер пресетів",
         "lbl_load_preset": "Завантажити пресет (.json)",
-        "btn_save_preset": "⬇️ Зберегти поточні налаштування",
-        "msg_preset_loaded": "✅ Пресет успішно завантажено!",
+        "btn_save_preset": "⬇️ Зберегти повний пресет",
+        "msg_preset_loaded": "✅ Пресет завантажено (лого, шрифти, налаштування)!",
         "error_preset": "❌ Помилка пресету: {}",
         
         "sec_file": "1. Файл та Ім'я",
@@ -63,6 +69,7 @@ TRANSLATIONS = {
         "lbl_text_input": "Текст вотермарки",
         "lbl_font": "Шрифт",
         "lbl_color": "Колір",
+        "msg_preset_logo_active": "ℹ️ Використовується логотип із пресету. Завантажте новий файл, щоб замінити його.",
         
         "lbl_pos": "Позиція",
         "opt_pos_tile": "Замощення (Паттерн)",
@@ -100,24 +107,23 @@ TRANSLATIONS = {
         "lang_select": "Мова інтерфейсу / Interface Language",
         
         "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.4",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.5",
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v5.4 Presets:**\n- 💾 Збереження та завантаження налаштувань (.json)\n- 🛡️ Стабільність v5.2"
+        "about_changelog": "**v5.5 Full Presets:**\n- 💾 Пресети тепер зберігають Логотип (всередині файлу)\n- 💾 Збереження шрифтів, форматів та іменування\n- ⚡ Виправлено відображення даних після завантаження"
     },
     "en": {
-        "title": "📸 Watermarker Pro v5.4",
+        "title": "📸 Watermarker Pro v5.5",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
         
-        # Presets Section
         "sec_presets": "💾 Presets Manager",
         "lbl_load_preset": "Load Preset (.json)",
-        "btn_save_preset": "⬇️ Save Current Settings",
-        "msg_preset_loaded": "✅ Preset loaded successfully!",
+        "btn_save_preset": "⬇️ Save Full Preset",
+        "msg_preset_loaded": "✅ Preset loaded (logo, fonts, settings included)!",
         "error_preset": "❌ Preset error: {}",
         
         "sec_file": "1. File & Naming",
@@ -138,6 +144,7 @@ TRANSLATIONS = {
         "lbl_text_input": "Watermark Text",
         "lbl_font": "Font",
         "lbl_color": "Color",
+        "msg_preset_logo_active": "ℹ️ Using logo from preset. Upload new file to override.",
         
         "lbl_pos": "Position",
         "opt_pos_tile": "Tiled (Pattern)",
@@ -175,13 +182,13 @@ TRANSLATIONS = {
         "lang_select": "Interface Language / Мова інтерфейсу",
         
         "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.4",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.5",
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v5.4 Presets:**\n- 💾 Save & Load Settings (.json)\n- 🛡️ Stability v5.2"
+        "about_changelog": "**v5.5 Full Presets:**\n- 💾 Presets now include Logo (Base64 encoded)\n- 💾 Saving fonts, formats, and naming\n- ⚡ Fixed UI update after loading"
     }
 }
 
@@ -262,26 +269,58 @@ def reset_settings():
     st.session_state['wm_angle_key'] = DEFAULT_SETTINGS['wm_angle']
     st.session_state['wm_text_key'] = DEFAULT_SETTINGS['wm_text']
     st.session_state['wm_text_color_key'] = DEFAULT_SETTINGS['wm_text_color']
+    
+    st.session_state['out_fmt_key'] = DEFAULT_SETTINGS['out_fmt']
+    st.session_state['out_quality_key'] = DEFAULT_SETTINGS['out_quality']
+    st.session_state['naming_mode_key'] = DEFAULT_SETTINGS['naming_mode']
+    st.session_state['naming_prefix_key'] = DEFAULT_SETTINGS['naming_prefix']
+    st.session_state['font_name_key'] = DEFAULT_SETTINGS['font_name']
+    st.session_state['preset_wm_bytes_key'] = None # Clear loaded logo
 
-def get_current_settings_json():
-    """Збирає всі налаштування в словник для збереження."""
+def get_current_settings_json(uploaded_wm_file):
+    """Збирає всі налаштування + картинку лого в JSON."""
+    
+    # Спроба отримати байти логотипу: або з завантаження, або з кешу
+    wm_b64 = None
+    if uploaded_wm_file:
+        wm_b64 = engine.image_to_base64(uploaded_wm_file.getvalue())
+    elif st.session_state.get('preset_wm_bytes_key'):
+        wm_b64 = engine.image_to_base64(st.session_state['preset_wm_bytes_key'])
+        
     settings = {
+        # Geometry
         'resize_val': st.session_state.get('resize_val_state', 1920),
+        
+        # Watermark Look
         'wm_pos': st.session_state.get('wm_pos_key', 'bottom-right'),
         'wm_scale': st.session_state.get('wm_scale_key', 15),
         'wm_opacity': st.session_state.get('wm_opacity_key', 1.0),
         'wm_margin': st.session_state.get('wm_margin_key', 15),
         'wm_gap': st.session_state.get('wm_gap_key', 30),
         'wm_angle': st.session_state.get('wm_angle_key', 0),
+        
+        # Text
         'wm_text': st.session_state.get('wm_text_key', ''),
-        'wm_text_color': st.session_state.get('wm_text_color_key', '#FFFFFF')
+        'wm_text_color': st.session_state.get('wm_text_color_key', '#FFFFFF'),
+        'font_name': st.session_state.get('font_name_key', None),
+        
+        # Files (Added in v5.5)
+        'out_fmt': st.session_state.get('out_fmt_key', 'JPEG'),
+        'out_quality': st.session_state.get('out_quality_key', 80),
+        'naming_mode': st.session_state.get('naming_mode_key', 'Keep Original'),
+        'naming_prefix': st.session_state.get('naming_prefix_key', ''),
+        
+        # Logo File (Base64)
+        'wm_image_b64': wm_b64
     }
     return json.dumps(settings, indent=4)
 
 def apply_settings_from_json(json_data):
-    """Застосовує налаштування з JSON."""
+    """Завантажує налаштування і картинку в Session State."""
     try:
         data = json.load(json_data)
+        
+        # Basic
         if 'resize_val' in data: st.session_state['resize_val_state'] = data['resize_val']
         if 'wm_pos' in data: st.session_state['wm_pos_key'] = data['wm_pos']
         if 'wm_scale' in data: st.session_state['wm_scale_key'] = data['wm_scale']
@@ -289,8 +328,25 @@ def apply_settings_from_json(json_data):
         if 'wm_margin' in data: st.session_state['wm_margin_key'] = data['wm_margin']
         if 'wm_gap' in data: st.session_state['wm_gap_key'] = data['wm_gap']
         if 'wm_angle' in data: st.session_state['wm_angle_key'] = data['wm_angle']
+        
+        # Text
         if 'wm_text' in data: st.session_state['wm_text_key'] = data['wm_text']
         if 'wm_text_color' in data: st.session_state['wm_text_color_key'] = data['wm_text_color']
+        if 'font_name' in data: st.session_state['font_name_key'] = data['font_name']
+        
+        # Files
+        if 'out_fmt' in data: st.session_state['out_fmt_key'] = data['out_fmt']
+        if 'out_quality' in data: st.session_state['out_quality_key'] = data['out_quality']
+        if 'naming_mode' in data: st.session_state['naming_mode_key'] = data['naming_mode']
+        if 'naming_prefix' in data: st.session_state['naming_prefix_key'] = data['naming_prefix']
+        
+        # Decode Logo
+        if 'wm_image_b64' in data and data['wm_image_b64']:
+            img_bytes = engine.base64_to_bytes(data['wm_image_b64'])
+            st.session_state['preset_wm_bytes_key'] = img_bytes
+        else:
+            st.session_state['preset_wm_bytes_key'] = None
+            
         return True
     except Exception as e:
         return str(e)
@@ -302,36 +358,41 @@ with st.sidebar:
     
     st.header(T['sb_config'])
     
-    # --- PRESETS SECTION (NEW) ---
+    # --- PRESETS ---
     with st.expander(T['sec_presets'], expanded=False):
-        # Load
         uploaded_preset = st.file_uploader(T['lbl_load_preset'], type=['json'], key='preset_uploader')
         if uploaded_preset is not None:
-            res = apply_settings_from_json(uploaded_preset)
-            if res is True:
-                st.success(T['msg_preset_loaded'])
-                # Невеликий хак, щоб оновити віджети
-                st.rerun()
-            else:
-                st.error(T['error_preset'].format(res))
+            # Check if processed in this run to avoid infinite loop
+            if f"processed_{uploaded_preset.name}" not in st.session_state:
+                res = apply_settings_from_json(uploaded_preset)
+                if res is True:
+                    st.session_state[f"processed_{uploaded_preset.name}"] = True
+                    st.success(T['msg_preset_loaded'])
+                    st.rerun() # Refresh widgets
+                else:
+                    st.error(T['error_preset'].format(res))
         
         st.divider()
-        # Save
-        json_str = get_current_settings_json()
+        # Pass the current file uploader object to save its content
+        current_wm_file = st.session_state.get('wm_uploader_obj') 
+        json_str = get_current_settings_json(current_wm_file)
+        
         st.download_button(
             label=T['btn_save_preset'],
             data=json_str,
-            file_name="wm_preset.json",
+            file_name="wm_preset_full.json",
             mime="application/json",
             use_container_width=True
         )
 
     with st.expander(T['sec_file']):
-        out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"])
+        # Bind keys to session state
+        out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"], key='out_fmt_key')
         quality = 80
-        if out_fmt != "PNG": quality = st.slider(T['lbl_quality'], 50, 100, 80, 5)
-        naming_mode = st.selectbox(T['lbl_naming'], ["Keep Original", "Prefix + Sequence"])
-        prefix = st.text_input(T['lbl_prefix'], placeholder="img")
+        if out_fmt != "PNG": 
+            quality = st.slider(T['lbl_quality'], 50, 100, 80, 5, key='out_quality_key')
+        naming_mode = st.selectbox(T['lbl_naming'], ["Keep Original", "Prefix + Sequence"], key='naming_mode_key')
+        prefix = st.text_input(T['lbl_prefix'], placeholder="img", key='naming_prefix_key')
 
     with st.expander(T['sec_geo'], expanded=True):
         resize_on = st.checkbox(T['chk_resize'], value=True)
@@ -346,13 +407,35 @@ with st.sidebar:
     with st.expander(T['sec_wm'], expanded=True):
         tab1, tab2 = st.tabs([T['tab_logo'], T['tab_text']])
         wm_type = "image"
+        
         with tab1:
+            # Save object to session to access bytes for saving later
             wm_file = st.file_uploader(T['lbl_logo_up'], type=["png"], key="wm_uploader")
-            if wm_file: wm_type = "image"
+            st.session_state['wm_uploader_obj'] = wm_file
+            
+            if wm_file: 
+                wm_type = "image"
+            elif st.session_state.get('preset_wm_bytes_key'):
+                wm_type = "image"
+                st.info(T['msg_preset_logo_active'])
+                # Preview preset logo
+                try:
+                    p_img = Image.open(io.BytesIO(st.session_state['preset_wm_bytes_key']))
+                    st.image(p_img, width=150)
+                except: pass
+
         with tab2:
             wm_text = st.text_area(T['lbl_text_input'], key='wm_text_key')
             fonts = get_available_fonts()
-            selected_font_name = st.selectbox(T['lbl_font'], fonts) if fonts else None
+            
+            # Smart font selection index
+            f_idx = 0
+            current_f = st.session_state.get('font_name_key')
+            if current_f and current_f in fonts:
+                f_idx = fonts.index(current_f)
+            
+            selected_font_name = st.selectbox(T['lbl_font'], fonts, index=f_idx, key='font_name_key') if fonts else None
+            
             if not fonts: st.caption("No fonts found in assets/fonts. Using default.")
             wm_text_color = st.color_picker(T['lbl_color'], '#FFFFFF', key='wm_text_color_key')
             if wm_text: wm_type = "text"
@@ -371,7 +454,6 @@ with st.sidebar:
             wm_gap = 0
         wm_angle = st.slider(T['lbl_angle'], -180, 180, key='wm_angle_key')
 
-    # --- PERFORMANCE SECTION (Safe Mode) ---
     with st.expander(T['sec_perf'], expanded=False):
         max_threads = st.slider(T['lbl_threads'], 1, 8, 2, help=T['help_threads'])
 
@@ -479,19 +561,28 @@ with c_left:
             else:
                 progress = st.progress(0)
                 
-                # --- PREPARE WM ---
+                # --- PREPARE WM (UPDATED FOR PRESETS) ---
                 wm_obj = None
                 try:
                     if wm_text.strip():
+                        # Text Mode
                         font_path = None
                         if selected_font_name:
                             font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
                         wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
                         wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
-                    elif wm_file:
-                        wm_bytes = wm_file.getvalue()
-                        wm_obj = engine.load_watermark_from_file(wm_bytes)
-                        wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                    else:
+                        # Image Mode: Check Upload -> Check Preset
+                        wm_bytes = None
+                        if wm_file:
+                            wm_bytes = wm_file.getvalue()
+                        elif st.session_state.get('preset_wm_bytes_key'):
+                            wm_bytes = st.session_state['preset_wm_bytes_key']
+                            
+                        if wm_bytes:
+                            wm_obj = engine.load_watermark_from_file(wm_bytes)
+                            wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+
                 except Exception as e:
                     st.error(T['error_wm_load'].format(e))
                     st.stop()
@@ -549,6 +640,7 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
+            # --- LIVE PREVIEW (UPDATED) ---
             wm_obj = None
             try:
                 if wm_text.strip():
@@ -557,9 +649,14 @@ with c_right:
                         font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
                     wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
                     if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
-                elif wm_file:
-                    wm_obj = engine.load_watermark_from_file(wm_file.getvalue())
-                    if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                else:
+                    wm_bytes = None
+                    if wm_file: wm_bytes = wm_file.getvalue()
+                    elif st.session_state.get('preset_wm_bytes_key'): wm_bytes = st.session_state['preset_wm_bytes_key']
+                    
+                    if wm_bytes:
+                        wm_obj = engine.load_watermark_from_file(wm_bytes)
+                        if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
             except: pass
             
             resize_cfg = {
