@@ -7,13 +7,14 @@ import tempfile
 import zipfile
 import concurrent.futures
 import gc
+import json
 from datetime import datetime
 from PIL import Image
 import watermarker_engine as engine
 import glob
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro v5.2", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.4", page_icon="📸", layout="wide")
 
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
@@ -33,9 +34,16 @@ CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v5.2",
+        "title": "📸 Watermarker Pro v5.4",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
+        
+        # Presets Section
+        "sec_presets": "💾 Менеджер пресетів",
+        "lbl_load_preset": "Завантажити пресет (.json)",
+        "btn_save_preset": "⬇️ Зберегти поточні налаштування",
+        "msg_preset_loaded": "✅ Пресет успішно завантажено!",
+        "error_preset": "❌ Помилка пресету: {}",
         
         "sec_file": "1. Файл та Ім'я",
         "lbl_format": "Формат виводу",
@@ -92,18 +100,25 @@ TRANSLATIONS = {
         "lang_select": "Мова інтерфейсу / Interface Language",
         
         "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.2",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.4",
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v5.2 Stability:**\n- 🛡️ Захист від переповнення RAM\n- ⚙️ Контроль потоків (Threads)\n- 🧹 Оптимізація пам'яті"
+        "about_changelog": "**v5.4 Presets:**\n- 💾 Збереження та завантаження налаштувань (.json)\n- 🛡️ Стабільність v5.2"
     },
     "en": {
-        "title": "📸 Watermarker Pro v5.2",
+        "title": "📸 Watermarker Pro v5.4",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
+        
+        # Presets Section
+        "sec_presets": "💾 Presets Manager",
+        "lbl_load_preset": "Load Preset (.json)",
+        "btn_save_preset": "⬇️ Save Current Settings",
+        "msg_preset_loaded": "✅ Preset loaded successfully!",
+        "error_preset": "❌ Preset error: {}",
         
         "sec_file": "1. File & Naming",
         "lbl_format": "Output Format",
@@ -160,13 +175,13 @@ TRANSLATIONS = {
         "lang_select": "Interface Language / Мова інтерфейсу",
         
         "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.2",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.4",
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v5.2 Stability:**\n- 🛡️ RAM Protection\n- ⚙️ Thread Control\n- 🧹 Memory Optimization"
+        "about_changelog": "**v5.4 Presets:**\n- 💾 Save & Load Settings (.json)\n- 🛡️ Stability v5.2"
     }
 }
 
@@ -248,6 +263,38 @@ def reset_settings():
     st.session_state['wm_text_key'] = DEFAULT_SETTINGS['wm_text']
     st.session_state['wm_text_color_key'] = DEFAULT_SETTINGS['wm_text_color']
 
+def get_current_settings_json():
+    """Збирає всі налаштування в словник для збереження."""
+    settings = {
+        'resize_val': st.session_state.get('resize_val_state', 1920),
+        'wm_pos': st.session_state.get('wm_pos_key', 'bottom-right'),
+        'wm_scale': st.session_state.get('wm_scale_key', 15),
+        'wm_opacity': st.session_state.get('wm_opacity_key', 1.0),
+        'wm_margin': st.session_state.get('wm_margin_key', 15),
+        'wm_gap': st.session_state.get('wm_gap_key', 30),
+        'wm_angle': st.session_state.get('wm_angle_key', 0),
+        'wm_text': st.session_state.get('wm_text_key', ''),
+        'wm_text_color': st.session_state.get('wm_text_color_key', '#FFFFFF')
+    }
+    return json.dumps(settings, indent=4)
+
+def apply_settings_from_json(json_data):
+    """Застосовує налаштування з JSON."""
+    try:
+        data = json.load(json_data)
+        if 'resize_val' in data: st.session_state['resize_val_state'] = data['resize_val']
+        if 'wm_pos' in data: st.session_state['wm_pos_key'] = data['wm_pos']
+        if 'wm_scale' in data: st.session_state['wm_scale_key'] = data['wm_scale']
+        if 'wm_opacity' in data: st.session_state['wm_opacity_key'] = data['wm_opacity']
+        if 'wm_margin' in data: st.session_state['wm_margin_key'] = data['wm_margin']
+        if 'wm_gap' in data: st.session_state['wm_gap_key'] = data['wm_gap']
+        if 'wm_angle' in data: st.session_state['wm_angle_key'] = data['wm_angle']
+        if 'wm_text' in data: st.session_state['wm_text_key'] = data['wm_text']
+        if 'wm_text_color' in data: st.session_state['wm_text_color_key'] = data['wm_text_color']
+        return True
+    except Exception as e:
+        return str(e)
+
 # --- UI START ---
 with st.sidebar:
     lang_code = st.session_state['lang_code']
@@ -255,6 +302,30 @@ with st.sidebar:
     
     st.header(T['sb_config'])
     
+    # --- PRESETS SECTION (NEW) ---
+    with st.expander(T['sec_presets'], expanded=False):
+        # Load
+        uploaded_preset = st.file_uploader(T['lbl_load_preset'], type=['json'], key='preset_uploader')
+        if uploaded_preset is not None:
+            res = apply_settings_from_json(uploaded_preset)
+            if res is True:
+                st.success(T['msg_preset_loaded'])
+                # Невеликий хак, щоб оновити віджети
+                st.rerun()
+            else:
+                st.error(T['error_preset'].format(res))
+        
+        st.divider()
+        # Save
+        json_str = get_current_settings_json()
+        st.download_button(
+            label=T['btn_save_preset'],
+            data=json_str,
+            file_name="wm_preset.json",
+            mime="application/json",
+            use_container_width=True
+        )
+
     with st.expander(T['sec_file']):
         out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"])
         quality = 80
@@ -408,6 +479,7 @@ with c_left:
             else:
                 progress = st.progress(0)
                 
+                # --- PREPARE WM ---
                 wm_obj = None
                 try:
                     if wm_text.strip():
@@ -435,7 +507,6 @@ with c_left:
                 report = []
                 zip_buffer = io.BytesIO()
                 
-                # THREAD SAFETY FIX (v5.2)
                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
                     futures = {}
                     for i, fname in enumerate(process_list):
