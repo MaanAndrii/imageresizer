@@ -13,7 +13,7 @@ import watermarker_engine as engine
 import glob
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro v5.3", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.2", page_icon="📸", layout="wide")
 
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
@@ -24,8 +24,7 @@ DEFAULT_SETTINGS = {
     'wm_gap': 30,
     'wm_angle': 0,
     'wm_text': '',
-    'wm_text_color': '#FFFFFF',
-    'wm_emboss': False # NEW
+    'wm_text_color': '#FFFFFF'
 }
 
 TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 45}
@@ -34,7 +33,7 @@ CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v5.3",
+        "title": "📸 Watermarker Pro v5.2",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
@@ -56,7 +55,6 @@ TRANSLATIONS = {
         "lbl_text_input": "Текст вотермарки",
         "lbl_font": "Шрифт",
         "lbl_color": "Колір",
-        "chk_emboss": "🗿 Рельєфний ефект (Тиснення)", # NEW
         
         "lbl_pos": "Позиція",
         "opt_pos_tile": "Замощення (Паттерн)",
@@ -94,16 +92,16 @@ TRANSLATIONS = {
         "lang_select": "Мова інтерфейсу / Interface Language",
         
         "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.3",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.2",
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v5.3 3D Emboss:**\n- 🗿 Додано ефект рельєфного тиснення\n- 💎 3D-вигляд для лого та тексту"
+        "about_changelog": "**v5.2 Stability:**\n- 🛡️ Захист від переповнення RAM\n- ⚙️ Контроль потоків (Threads)\n- 🧹 Оптимізація пам'яті"
     },
     "en": {
-        "title": "📸 Watermarker Pro v5.3",
+        "title": "📸 Watermarker Pro v5.2",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
         
@@ -125,7 +123,6 @@ TRANSLATIONS = {
         "lbl_text_input": "Watermark Text",
         "lbl_font": "Font",
         "lbl_color": "Color",
-        "chk_emboss": "🗿 Emboss Effect (3D Relief)", # NEW
         
         "lbl_pos": "Position",
         "opt_pos_tile": "Tiled (Pattern)",
@@ -163,13 +160,13 @@ TRANSLATIONS = {
         "lang_select": "Interface Language / Мова інтерфейсу",
         
         "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.3",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.2",
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v5.3 3D Emboss:**\n- 🗿 Added Emboss (Relief) Effect\n- 💎 3D look for logos and text"
+        "about_changelog": "**v5.2 Stability:**\n- 🛡️ RAM Protection\n- ⚙️ Thread Control\n- 🧹 Memory Optimization"
     }
 }
 
@@ -250,7 +247,6 @@ def reset_settings():
     st.session_state['wm_angle_key'] = DEFAULT_SETTINGS['wm_angle']
     st.session_state['wm_text_key'] = DEFAULT_SETTINGS['wm_text']
     st.session_state['wm_text_color_key'] = DEFAULT_SETTINGS['wm_text_color']
-    st.session_state['wm_emboss_key'] = False
 
 # --- UI START ---
 with st.sidebar:
@@ -290,10 +286,6 @@ with st.sidebar:
             wm_text_color = st.color_picker(T['lbl_color'], '#FFFFFF', key='wm_text_color_key')
             if wm_text: wm_type = "text"
 
-        # EMBOSS CHECKBOX
-        st.write("") # Spacer
-        wm_emboss = st.checkbox(T['chk_emboss'], key='wm_emboss_key')
-
         st.divider()
         wm_pos = st.selectbox(T['lbl_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], 
                               key='wm_pos_key', on_change=handle_pos_change)
@@ -308,7 +300,7 @@ with st.sidebar:
             wm_gap = 0
         wm_angle = st.slider(T['lbl_angle'], -180, 180, key='wm_angle_key')
 
-    # --- PERFORMANCE SECTION ---
+    # --- PERFORMANCE SECTION (Safe Mode) ---
     with st.expander(T['sec_perf'], expanded=False):
         max_threads = st.slider(T['lbl_threads'], 1, 8, 2, help=T['help_threads'])
 
@@ -436,14 +428,14 @@ with c_left:
                     'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
                     'wm_scale': wm_scale, 'wm_margin': wm_margin if wm_pos!='tiled' else 0,
                     'wm_gap': wm_gap if wm_pos=='tiled' else 0,
-                    'wm_position': wm_pos, 'wm_angle': wm_angle,
-                    'wm_emboss': wm_emboss # PASS TO ENGINE
+                    'wm_position': wm_pos, 'wm_angle': wm_angle
                 }
                 
                 results = []
                 report = []
                 zip_buffer = io.BytesIO()
                 
+                # THREAD SAFETY FIX (v5.2)
                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
                     futures = {}
                     for i, fname in enumerate(process_list):
@@ -503,8 +495,7 @@ with c_right:
                 'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
                 'wm_scale': wm_scale, 'wm_margin': wm_margin if wm_pos!='tiled' else 0,
                 'wm_gap': wm_gap if wm_pos=='tiled' else 0,
-                'wm_position': wm_pos, 'wm_angle': wm_angle,
-                'wm_emboss': wm_emboss # PASS TO ENGINE
+                'wm_position': wm_pos, 'wm_angle': wm_angle
             }
             
             try:
