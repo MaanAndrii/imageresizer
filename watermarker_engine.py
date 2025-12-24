@@ -1,17 +1,16 @@
 import io
 import os
 import re
-import base64  # NEW import
+import base64
 from datetime import datetime
 from PIL import Image, ImageEnhance, ImageOps, ImageDraw, ImageFont
 from translitua import translit
 
 """
-Watermarker Pro Engine v5.5 (Base64 Support)
+Watermarker Pro Engine v5.6 (Editor Support)
 --------------------------------------------
 Updates:
-- Added image_to_base64() for presets
-- Added base64_to_bytes() for presets
+- Added rotate_image_file() for permanent rotation
 """
 
 # === CONFIG ===
@@ -24,16 +23,13 @@ DEFAULT_CONFIG = {
     'wm_position': 'bottom-right'
 }
 
-# --- NEW HELPERS FOR PRESETS ---
+# --- HELPERS ---
 def image_to_base64(image_bytes: bytes) -> str:
-    """Конвертує байти зображення у рядок Base64 для збереження в JSON."""
     return base64.b64encode(image_bytes).decode('utf-8')
 
 def base64_to_bytes(base64_string: str) -> bytes:
-    """Конвертує рядок Base64 назад у байти зображення."""
     return base64.b64decode(base64_string)
 
-# --- STANDARD FUNCTIONS ---
 def generate_filename(original_path: str, naming_mode: str, prefix: str = "", extension: str = "jpg", index: int = 1) -> str:
     original_name = os.path.basename(original_path)
     clean_prefix = re.sub(r'[\s\W_]+', '-', translit(prefix).lower()).strip('-') if prefix else ""
@@ -51,6 +47,8 @@ def generate_filename(original_path: str, naming_mode: str, prefix: str = "", ex
 
 def get_thumbnail(file_path: str, size=(300, 300)) -> str:
     thumb_path = f"{file_path}.thumb.jpg"
+    # Якщо файл існує, повертаємо його.
+    # ВАЖЛИВО: Для v5.6 ми будемо видаляти thumb при редагуванні, тому ця перевірка коректна.
     if os.path.exists(thumb_path): return thumb_path
     try:
         with Image.open(file_path) as img:
@@ -62,6 +60,26 @@ def get_thumbnail(file_path: str, size=(300, 300)) -> str:
     except Exception as e:
         print(f"Thumb error: {e}")
         return None
+
+def rotate_image_file(file_path: str, angle: int):
+    """Повертає зображення на диску на заданий кут (90/-90) і перезаписує його."""
+    try:
+        with Image.open(file_path) as img:
+            # Фікс орієнтації перед поворотом, щоб не було сюрпризів
+            img = ImageOps.exif_transpose(img)
+            # Expand=True змінює розмір полотна, щоб фото не обрізалось
+            rotated = img.rotate(angle, expand=True)
+            rotated.save(file_path, quality=95, subsampling=0)
+        
+        # Очищуємо кеш мініатюри, бо вона тепер неактуальна
+        thumb_path = f"{file_path}.thumb.jpg"
+        if os.path.exists(thumb_path):
+            os.remove(thumb_path)
+            
+        return True
+    except Exception as e:
+        print(f"Rotate error: {e}")
+        return False
 
 def load_watermark_from_file(wm_file_bytes: bytes) -> Image.Image:
     if not wm_file_bytes: return None
