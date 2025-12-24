@@ -2,15 +2,17 @@ import io
 import os
 import re
 from datetime import datetime
-from PIL import Image, ImageEnhance, ImageOps, ImageDraw, ImageFont, ImageFilter, ImageChops
+from PIL import Image, ImageEnhance, ImageOps, ImageDraw, ImageFont
 from translitua import translit
 
 """
-Watermarker Pro Engine v5.3 (Emboss Effect)
--------------------------------------------
-Updates:
-- Added create_emboss_effect() for 3D look
-- Integrated emboss logic into process_image
+Watermarker Pro Engine v5.2 (Stable)
+------------------------------------
+Features:
+- Path-based processing (Memory Safe)
+- EXIF Auto-Rotation
+- Text & Logo support
+- No experimental filters
 """
 
 # === CONFIG ===
@@ -87,45 +89,6 @@ def apply_opacity(image: Image.Image, opacity: float) -> Image.Image:
     image.putalpha(alpha)
     return image
 
-def create_emboss_effect(wm_img: Image.Image, intensity: int = 2) -> Image.Image:
-    """
-    Перетворює звичайний логотип на 3D рельєф (Highlight + Shadow).
-    intensity: сила зсуву в пікселях.
-    """
-    # Отримуємо маску прозорості (форму логотипу)
-    alpha = wm_img.split()[3]
-    
-    # Створюємо порожнє полотно
-    w, h = wm_img.size
-    embossed = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    
-    # 1. Тінь (Shadow) - Чорний колір, зсув вправо-вниз (+intensity)
-    shadow = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    shadow_mask = ImageChops.offset(alpha, intensity, intensity)
-    # Обрізаємо артефакти зсуву
-    shadow.paste((0, 0, 0, 180), (0, 0), mask=shadow_mask) 
-    
-    # 2. Блік (Highlight) - Білий колір, зсув вліво-вгору (-intensity)
-    highlight = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    highlight_mask = ImageChops.offset(alpha, -intensity, -intensity)
-    highlight.paste((255, 255, 255, 180), (0, 0), mask=highlight_mask)
-    
-    # 3. Компонуємо: Тінь + Блік
-    embossed = Image.alpha_composite(embossed, shadow)
-    embossed = Image.alpha_composite(embossed, highlight)
-    
-    # 4. Розмиваємо для м'якості (Soft edges)
-    embossed = embossed.filter(ImageFilter.GaussianBlur(radius=1))
-    
-    # 5. Маскуємо оригінальною формою, щоб прибрати зайве зовні
-    # Але для ефекту "тиснення" іноді краще залишити краї.
-    # Тут ми просто повертаємо результат як є, або накладаємо оригінальну альфу
-    # Щоб ефект був "всередині" логотипу:
-    final = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    final.paste(embossed, (0, 0), mask=alpha)
-    
-    return final
-
 def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int) -> tuple:
     with Image.open(file_path) as img:
         img = ImageOps.exif_transpose(img)
@@ -166,7 +129,6 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
             scale = resize_config.get('wm_scale', DEFAULT_CONFIG['wm_scale'])
             position = resize_config.get('wm_position', DEFAULT_CONFIG['wm_position'])
             angle = resize_config.get('wm_angle', DEFAULT_CONFIG['wm_angle'])
-            use_emboss = resize_config.get('wm_emboss', False) # NEW PARAM
             
             if scale > 0.9: scale = 0.9
             
@@ -177,16 +139,8 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
             wm_h_target = int(float(wm_obj.height) * w_ratio)
             if wm_h_target < 1: wm_h_target = 1
             
-            # 1. Спочатку ресайз логотипу
             wm_resized = wm_obj.resize((wm_w_target, wm_h_target), Image.Resampling.LANCZOS)
-            
-            # 2. ПОТІМ застосування ефекту тиснення (на вже потрібний розмір)
-            if use_emboss:
-                # Сила тиснення залежить від розміру (щоб на 4К було видно)
-                intensity = max(1, int(wm_w_target * 0.01)) 
-                wm_resized = create_emboss_effect(wm_resized, intensity)
 
-            # 3. Поворот
             if angle != 0:
                 wm_resized = wm_resized.rotate(angle, expand=True, resample=Image.BICUBIC)
 
