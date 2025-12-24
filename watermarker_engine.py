@@ -1,17 +1,17 @@
 import io
 import os
 import re
+import base64  # NEW import
 from datetime import datetime
 from PIL import Image, ImageEnhance, ImageOps, ImageDraw, ImageFont
 from translitua import translit
 
 """
-Watermarker Pro Engine v5.0 (Text & Metadata)
----------------------------------------------
+Watermarker Pro Engine v5.5 (Base64 Support)
+--------------------------------------------
 Updates:
-- Added create_text_watermark() factory
-- Added EXIF Auto-Rotation (ImageOps.exif_transpose)
-- Improved Metadata preservation
+- Added image_to_base64() for presets
+- Added base64_to_bytes() for presets
 """
 
 # === CONFIG ===
@@ -24,8 +24,17 @@ DEFAULT_CONFIG = {
     'wm_position': 'bottom-right'
 }
 
+# --- NEW HELPERS FOR PRESETS ---
+def image_to_base64(image_bytes: bytes) -> str:
+    """Конвертує байти зображення у рядок Base64 для збереження в JSON."""
+    return base64.b64encode(image_bytes).decode('utf-8')
+
+def base64_to_bytes(base64_string: str) -> bytes:
+    """Конвертує рядок Base64 назад у байти зображення."""
+    return base64.b64decode(base64_string)
+
+# --- STANDARD FUNCTIONS ---
 def generate_filename(original_path: str, naming_mode: str, prefix: str = "", extension: str = "jpg", index: int = 1) -> str:
-    """Генерує безпечне ім'я файлу."""
     original_name = os.path.basename(original_path)
     clean_prefix = re.sub(r'[\s\W_]+', '-', translit(prefix).lower()).strip('-') if prefix else ""
     
@@ -41,14 +50,11 @@ def generate_filename(original_path: str, naming_mode: str, prefix: str = "", ex
     return f"{base}.{extension}"
 
 def get_thumbnail(file_path: str, size=(300, 300)) -> str:
-    """Створює мініатюру та повертає шлях (Anti-Flicker)."""
     thumb_path = f"{file_path}.thumb.jpg"
-    if os.path.exists(thumb_path):
-        return thumb_path
-            
+    if os.path.exists(thumb_path): return thumb_path
     try:
         with Image.open(file_path) as img:
-            img = ImageOps.exif_transpose(img) # Fix rotation for thumb too
+            img = ImageOps.exif_transpose(img)
             img = img.convert('RGB')
             img.thumbnail(size)
             img.save(thumb_path, "JPEG", quality=70)
@@ -58,7 +64,6 @@ def get_thumbnail(file_path: str, size=(300, 300)) -> str:
         return None
 
 def load_watermark_from_file(wm_file_bytes: bytes) -> Image.Image:
-    """Завантажує логотип з файлу."""
     if not wm_file_bytes: return None
     try:
         wm = Image.open(io.BytesIO(wm_file_bytes)).convert("RGBA")
@@ -67,37 +72,26 @@ def load_watermark_from_file(wm_file_bytes: bytes) -> Image.Image:
         raise ValueError(f"Failed to load logo: {str(e)}")
 
 def create_text_watermark(text: str, font_path: str, size_pt: int, color_hex: str) -> Image.Image:
-    """Генерує зображення вотермарки з тексту."""
     if not text: return None
-    
-    # Створення прозорого полотна
-    # Спочатку пробуємо завантажити шрифт, інакше дефолтний
     try:
         font = ImageFont.truetype(font_path, size_pt) if font_path else ImageFont.load_default()
     except:
         font = ImageFont.load_default()
         
-    # Розрахунок розміру тексту
     dummy_draw = ImageDraw.Draw(Image.new('RGBA', (1, 1)))
     bbox = dummy_draw.textbbox((0, 0), text, font=font)
-    w = bbox[2] - bbox[0]
-    h = bbox[3] - bbox[1]
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     
-    # Додаємо трохи відступів, щоб літери не обрізались
     wm = Image.new('RGBA', (w + 20, h + 20), (0, 0, 0, 0))
     draw = ImageDraw.Draw(wm)
     
-    # Конвертація HEX кольору в RGB
     color = color_hex.lstrip('#')
     rgb = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
     
-    # Малюємо текст (Alpha поки 255, прозорість додасться пізніше в загальній логіці)
     draw.text((10, 10), text, font=font, fill=rgb + (255,))
-    
     return wm
 
 def apply_opacity(image: Image.Image, opacity: float) -> Image.Image:
-    """Застосовує прозорість до будь-якого RGBA зображення (текст або лого)."""
     if opacity >= 1.0: return image
     alpha = image.split()[3]
     alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
@@ -105,21 +99,15 @@ def apply_opacity(image: Image.Image, opacity: float) -> Image.Image:
     return image
 
 def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_config: dict, output_fmt: str, quality: int) -> tuple:
-    """Основна функція обробки."""
-    
     with Image.open(file_path) as img:
-        # 1. FIX EXIF ORIENTATION (Auto-Rotate)
         img = ImageOps.exif_transpose(img)
-        
-        # Зберігаємо EXIF для запису в результат (якщо він зберігся після transpose)
         exif_data = img.info.get('exif')
         
         orig_w, orig_h = img.size
         orig_size = os.path.getsize(file_path)
-        
         img = img.convert("RGBA")
         
-        # --- RESIZE LOGIC ---
+        # Resize
         target_value = resize_config.get('value', 1920)
         mode = resize_config.get('mode', 'Max Side')
         enabled = resize_config.get('enabled', False)
@@ -145,13 +133,12 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
             if scale_factor != 1.0:
                 img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-        # --- WATERMARK LOGIC ---
+        # Watermark
         if wm_obj:
             scale = resize_config.get('wm_scale', DEFAULT_CONFIG['wm_scale'])
             position = resize_config.get('wm_position', DEFAULT_CONFIG['wm_position'])
             angle = resize_config.get('wm_angle', DEFAULT_CONFIG['wm_angle'])
             
-            # Для текстових вотермарок scale працює як відносний розмір відносно фото
             if scale > 0.9: scale = 0.9
             
             wm_w_target = int(new_w * scale)
@@ -204,7 +191,7 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
                 pos_y = max(0, min(pos_y, new_h - wm_h_final))
                 img.paste(wm_resized, (pos_x, pos_y), wm_resized)
 
-        # --- EXPORT ---
+        # Export
         if output_fmt == "JPEG":
             background = Image.new("RGB", img.size, (255, 255, 255))
             background.paste(img, mask=img.split()[3])
@@ -213,11 +200,8 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
             img = img.convert("RGB")
 
         output_buffer = io.BytesIO()
-        
         save_kwargs = {}
-        # Додаємо збереження EXIF
-        if exif_data:
-            save_kwargs['exif'] = exif_data
+        if exif_data: save_kwargs['exif'] = exif_data
 
         if output_fmt == "JPEG":
             save_kwargs.update({"format": "JPEG", "quality": quality, "optimize": True, "subsampling": 0})
@@ -237,5 +221,4 @@ def process_image(file_path: str, filename: str, wm_obj: Image.Image, resize_con
             "new_size": len(result_bytes),
             "scale_factor": f"{scale_factor:.2f}x"
         }
-        
         return result_bytes, stats
