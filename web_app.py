@@ -9,13 +9,13 @@ import concurrent.futures
 import gc
 import json
 from datetime import datetime
-from PIL import Image, ImageOps
+from PIL import Image
 import watermarker_engine as engine
+import editor_module as editor # NEW IMPORT
 import glob
-from streamlit_cropper import st_cropper
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro v5.7", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.8", page_icon="📸", layout="wide")
 
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
@@ -38,20 +38,10 @@ DEFAULT_SETTINGS = {
 TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 45}
 CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle': 0}
 
-ASPECT_RATIOS = {
-    "Free": None,
-    "1:1": (1, 1),
-    "3:2": (3, 2),
-    "4:3": (4, 3),
-    "5:4": (5, 4),
-    "16:9": (16, 9),
-    "9:16": (9, 16)
-}
-
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v5.7",
+        "title": "📸 Watermarker Pro v5.8",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
@@ -118,7 +108,6 @@ TRANSLATIONS = {
         
         # Editor Keys
         "btn_open_editor": "🛠 Відкрити редактор (Popup)",
-        "editor_title": "✂️ Редактор зображення",
         "lbl_aspect": "Пропорції",
         "btn_rotate_left": "↺ -90°",
         "btn_rotate_right": "↻ +90°",
@@ -126,16 +115,16 @@ TRANSLATIONS = {
         "msg_edit_saved": "Зміни збережено!",
         
         "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.7",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.8",
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v5.7 Popup Editor:**\n- 🖼️ Редактор перенесено у модальне вікно\n- 📏 Покращено компонування інструментів\n- ✂️ Зручний кроп та поворот"
+        "about_changelog": "**v5.8 Refactor:**\n- 🏗️ Редактор винесено в окремий модуль\n- 🧹 Чистий код та архітектура\n- 🚀 Оптимізація імпортів"
     },
     "en": {
-        "title": "📸 Watermarker Pro v5.7",
+        "title": "📸 Watermarker Pro v5.8",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
         
@@ -202,7 +191,6 @@ TRANSLATIONS = {
         
         # Editor Keys
         "btn_open_editor": "🛠 Open Editor (Popup)",
-        "editor_title": "✂️ Image Editor",
         "lbl_aspect": "Aspect Ratio",
         "btn_rotate_left": "↺ -90°",
         "btn_rotate_right": "↻ +90°",
@@ -210,13 +198,13 @@ TRANSLATIONS = {
         "msg_edit_saved": "Changes saved!",
         
         "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.7",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.8",
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v5.7 Popup Editor:**\n- 🖼️ Editor moved to Modal Dialog\n- 📏 Improved tools layout\n- ✂️ Better Crop & Rotate UX"
+        "about_changelog": "**v5.8 Refactor:**\n- 🏗️ Editor moved to separate module\n- 🧹 Clean code architecture\n- 🚀 Optimized imports"
     }
 }
 
@@ -349,61 +337,6 @@ def apply_settings_from_json(json_data):
             st.session_state['preset_wm_bytes_key'] = None
         return True
     except Exception as e: return str(e)
-
-# --- POPUP EDITOR (v5.7) ---
-@st.dialog("🛠 Editor", width="large")
-def open_editor_dialog(fpath, T):
-    st.caption(f"{os.path.basename(fpath)}")
-    
-    # Tools Toolbar
-    col_aspect, col_rot_l, col_rot_r = st.columns([2, 1, 1])
-    
-    with col_aspect:
-        aspect_choice = st.radio(
-            T['lbl_aspect'], 
-            list(ASPECT_RATIOS.keys()), 
-            horizontal=True, 
-            label_visibility="collapsed"
-        )
-        aspect_val = ASPECT_RATIOS[aspect_choice]
-        
-    with col_rot_l:
-        if st.button(T['btn_rotate_left'], use_container_width=True):
-            engine.rotate_image_file(fpath, 90)
-            st.rerun()
-            
-    with col_rot_r:
-        if st.button(T['btn_rotate_right'], use_container_width=True):
-            engine.rotate_image_file(fpath, -90)
-            st.rerun()
-            
-    st.divider()
-
-    # Cropper Area
-    try:
-        img_to_crop = Image.open(fpath)
-        img_to_crop = ImageOps.exif_transpose(img_to_crop)
-        
-        # Maximize width
-        cropped_img = st_cropper(
-            img_to_crop,
-            realtime_update=True,
-            box_color='#FF0000',
-            aspect_ratio=aspect_val,
-            should_resize_image=True # Important for large images in modal
-        )
-        
-        if st.button(T['btn_save_edit'], type="primary", use_container_width=True):
-            cropped_img.save(fpath, quality=95)
-            # Clear thumb cache
-            thumb_path = f"{fpath}.thumb.jpg"
-            if os.path.exists(thumb_path): os.remove(thumb_path)
-            st.toast(T['msg_edit_saved'])
-            st.rerun() # Close dialog by rerun (Streamlit behavior)
-            
-    except Exception as e:
-        st.error(f"Editor Error: {e}")
-
 
 # --- UI START ---
 with st.sidebar:
@@ -631,9 +564,9 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
-            # --- POPUP EDITOR TRIGGER (v5.7) ---
+            # --- POPUP TRIGGER ---
             if st.button(T['btn_open_editor'], type="primary", use_container_width=True):
-                open_editor_dialog(fpath, T)
+                editor.open_editor_dialog(fpath, T)
 
             # Normal Preview
             wm_obj = None
