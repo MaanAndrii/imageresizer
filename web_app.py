@@ -6,13 +6,14 @@ import shutil
 import tempfile
 import zipfile
 import concurrent.futures
+import gc # Додано для очищення пам'яті
 from datetime import datetime
 from PIL import Image
 import watermarker_engine as engine
 import glob
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro v5.1", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.2", page_icon="📸", layout="wide")
 
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
@@ -32,7 +33,7 @@ CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v5.1",
+        "title": "📸 Watermarker Pro v5.2",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
@@ -63,6 +64,11 @@ TRANSLATIONS = {
         "lbl_margin": "Відступ (px)",
         "lbl_angle": "Кут нахилу (°)",
         
+        # New Performance Section
+        "sec_perf": "⚙️ Продуктивність",
+        "lbl_threads": "Потоки (Threads)",
+        "help_threads": "Зменшіть це число, якщо програма вилітає з помилкою. Для великих фото ставте 1 або 2.",
+        
         "files_header": "📂 Робоча область", 
         "uploader_label": "Завантажити фото",
         "btn_process": "🚀 Обробити", 
@@ -82,23 +88,21 @@ TRANSLATIONS = {
         "btn_selected": "✅ Обрано",
         "btn_select": "⬜ Обрати",
         "warn_no_files": "⚠️ Спочатку оберіть файли!",
-        
-        # New keys for v5.1
         "btn_clear_workspace": "♻️ Очистити все",
         "expander_add_files": "📤 Додати файли (Drag & Drop)",
+        "lang_select": "Мова інтерфейсу / Interface Language",
         
         "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.1",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.2",
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v5.1 UI Update:**\n- 🧹 Кнопка повного очищення\n- 📦 Компактний режим завантаження\n- ⚡ Покращений UX робочої області",
-        "lang_select": "Мова інтерфейсу / Interface Language" # ПОВЕРНУТО
+        "about_changelog": "**v5.2 Stability:**\n- 🛡️ Захист від переповнення RAM\n- ⚙️ Налаштування кількості потоків\n- 🧹 Покращене очищення пам'яті"
     },
     "en": {
-        "title": "📸 Watermarker Pro v5.1",
+        "title": "📸 Watermarker Pro v5.2",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
         
@@ -129,6 +133,11 @@ TRANSLATIONS = {
         "lbl_margin": "Margin (px)",
         "lbl_angle": "Angle (°)",
         
+        # New Performance Section
+        "sec_perf": "⚙️ Performance",
+        "lbl_threads": "Max Threads",
+        "help_threads": "Reduce this number if the app crashes. Use 1 or 2 for heavy photos.",
+        
         "files_header": "📂 Workspace", 
         "uploader_label": "Upload Photos",
         "btn_process": "🚀 Process", 
@@ -148,20 +157,18 @@ TRANSLATIONS = {
         "btn_selected": "✅ Selected",
         "btn_select": "⬜ Select",
         "warn_no_files": "⚠️ Select files first!",
-        
-        # New keys for v5.1
         "btn_clear_workspace": "♻️ Clear Workspace",
         "expander_add_files": "📤 Add Files (Drag & Drop)",
+        "lang_select": "Interface Language / Мова інтерфейсу",
         
         "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.1",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.2",
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v5.1 UI Update:**\n- 🧹 Clear Workspace Button\n- 📦 Compact Uploader Mode\n- ⚡ Improved Workspace UX",
-        "lang_select": "Interface Language / Мова інтерфейсу" # RESTORED
+        "about_changelog": "**v5.2 Stability:**\n- 🛡️ RAM Overflow Protection\n- ⚙️ Thread Count Control\n- 🧹 Improved Memory Cleanup"
     }
 }
 
@@ -295,9 +302,14 @@ with st.sidebar:
             wm_gap = 0
         wm_angle = st.slider(T['lbl_angle'], -180, 180, key='wm_angle_key')
 
+    # --- PERFORMANCE SECTION (NEW) ---
+    with st.expander(T['sec_perf'], expanded=False):
+        max_threads = st.slider(T['lbl_threads'], 1, 8, 2, help=T['help_threads'])
+
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
+    # --- ABOUT SECTION ---
     with st.expander(T['about_expander'], expanded=False):
         st.markdown(T['about_prod'])
         st.markdown(T['about_auth'])
@@ -398,6 +410,7 @@ with c_left:
             else:
                 progress = st.progress(0)
                 
+                # --- PREPARE WM ---
                 wm_obj = None
                 try:
                     if wm_text.strip():
@@ -425,7 +438,9 @@ with c_left:
                 report = []
                 zip_buffer = io.BytesIO()
                 
-                with concurrent.futures.ThreadPoolExecutor() as executor:
+                # --- SAFE THREADING (v5.2) ---
+                # Використовуємо налаштування з сайдбару
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
                     futures = {}
                     for i, fname in enumerate(process_list):
                         fpath = files_map[fname]
@@ -440,6 +455,9 @@ with c_left:
                                 zf.writestr(stats['filename'], res_bytes)
                                 results.append((stats['filename'], res_bytes))
                                 report.append(stats)
+                                # Примусове очищення пам'яті після кожного файлу
+                                del res_bytes
+                                gc.collect()
                             except Exception as e: st.error(f"Error {futures[fut]}: {e}")
                             progress.progress((i+1)/len(process_list))
                 
