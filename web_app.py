@@ -9,10 +9,10 @@ import concurrent.futures
 import gc
 import json
 from datetime import datetime
-from PIL import Image
+from PIL import Image, ImageOps # FIXED IMPORT
 import watermarker_engine as engine
 import glob
-from streamlit_cropper import st_cropper # NEW LIBRARY
+from streamlit_cropper import st_cropper
 
 # --- КОНФІГУРАЦІЯ ---
 st.set_page_config(page_title="Watermarker Pro v5.6", page_icon="📸", layout="wide")
@@ -38,7 +38,6 @@ DEFAULT_SETTINGS = {
 TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 45}
 CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle': 0}
 
-# Aspect Ratios dictionary for Crop
 ASPECT_RATIOS = {
     "Free / Вільний": None,
     "1:1 (Square)": (1, 1),
@@ -117,7 +116,6 @@ TRANSLATIONS = {
         "expander_add_files": "📤 Додати файли",
         "lang_select": "Мова інтерфейсу / Interface Language",
         
-        # Editor Keys
         "tgl_edit_mode": "🛠 Editor Mode / Редагування",
         "lbl_aspect": "Пропорції",
         "btn_rotate_left": "↺ -90°",
@@ -200,7 +198,6 @@ TRANSLATIONS = {
         "expander_add_files": "📤 Add Files",
         "lang_select": "Interface Language / Мова інтерфейсу",
         
-        # Editor Keys
         "tgl_edit_mode": "🛠 Editor Mode",
         "lbl_aspect": "Aspect Ratio",
         "btn_rotate_left": "↺ -90°",
@@ -292,7 +289,6 @@ def reset_settings():
     st.session_state['wm_angle_key'] = DEFAULT_SETTINGS['wm_angle']
     st.session_state['wm_text_key'] = DEFAULT_SETTINGS['wm_text']
     st.session_state['wm_text_color_key'] = DEFAULT_SETTINGS['wm_text_color']
-    
     st.session_state['out_fmt_key'] = DEFAULT_SETTINGS['out_fmt']
     st.session_state['out_quality_key'] = DEFAULT_SETTINGS['out_quality']
     st.session_state['naming_mode_key'] = DEFAULT_SETTINGS['naming_mode']
@@ -588,7 +584,7 @@ with c_right:
                     st.caption("Rotate")
                     c1, c2 = st.columns(2)
                     if c1.button(T['btn_rotate_left'], use_container_width=True):
-                        engine.rotate_image_file(fpath, 90) # Left is positive for PIL? No, usually counter-clockwise is positive
+                        engine.rotate_image_file(fpath, 90)
                         st.rerun()
                     if c2.button(T['btn_rotate_right'], use_container_width=True):
                         engine.rotate_image_file(fpath, -90)
@@ -602,10 +598,9 @@ with c_right:
                 
                 with col_crop:
                     # Load image for cropper
-                    # We need to open it fresh
                     try:
                         img_to_crop = Image.open(fpath)
-                        # Fix orientation again just in case, though rotate_image_file handles it
+                        # Fix orientation again just in case
                         img_to_crop = ImageOps.exif_transpose(img_to_crop)
                         
                         cropped_img = st_cropper(
@@ -616,9 +611,8 @@ with c_right:
                         )
                         
                         if st.button(T['btn_save_edit'], type="primary", use_container_width=True):
-                            # Save the cropped image back to fpath
                             cropped_img.save(fpath, quality=95)
-                            # Clear thumbnail cache
+                            # Clear thumb cache
                             thumb_path = f"{fpath}.thumb.jpg"
                             if os.path.exists(thumb_path): os.remove(thumb_path)
                             st.toast(T['msg_edit_saved'])
@@ -628,7 +622,7 @@ with c_right:
                         st.error(f"Editor Error: {e}")
 
             else:
-                # Normal Preview Logic
+                # Normal Preview
                 wm_obj = None
                 try:
                     if wm_text.strip():
