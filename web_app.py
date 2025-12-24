@@ -9,13 +9,13 @@ import concurrent.futures
 import gc
 import json
 from datetime import datetime
-from PIL import Image, ImageOps # FIXED IMPORT
+from PIL import Image, ImageOps
 import watermarker_engine as engine
 import glob
 from streamlit_cropper import st_cropper
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro v5.6", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.7", page_icon="📸", layout="wide")
 
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
@@ -39,19 +39,19 @@ TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 4
 CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle': 0}
 
 ASPECT_RATIOS = {
-    "Free / Вільний": None,
-    "1:1 (Square)": (1, 1),
-    "3:2 (Classic)": (3, 2),
-    "4:3 (Standard)": (4, 3),
-    "5:4 (Insta Portrait)": (5, 4),
-    "16:9 (Wide)": (16, 9),
-    "9:16 (Stories/Reels)": (9, 16)
+    "Free": None,
+    "1:1": (1, 1),
+    "3:2": (3, 2),
+    "4:3": (4, 3),
+    "5:4": (5, 4),
+    "16:9": (16, 9),
+    "9:16": (9, 16)
 }
 
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v5.6",
+        "title": "📸 Watermarker Pro v5.7",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
@@ -116,24 +116,26 @@ TRANSLATIONS = {
         "expander_add_files": "📤 Додати файли",
         "lang_select": "Мова інтерфейсу / Interface Language",
         
-        "tgl_edit_mode": "🛠 Editor Mode / Редагування",
+        # Editor Keys
+        "btn_open_editor": "🛠 Відкрити редактор (Popup)",
+        "editor_title": "✂️ Редактор зображення",
         "lbl_aspect": "Пропорції",
         "btn_rotate_left": "↺ -90°",
         "btn_rotate_right": "↻ +90°",
-        "btn_save_edit": "💾 Зберегти та Замінити",
+        "btn_save_edit": "💾 Зберегти та Закрити",
         "msg_edit_saved": "Зміни збережено!",
         
         "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.6",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.7",
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v5.6 Image Editor:**\n- ✂️ Кроп (Обрізка) з фіксованими пропорціями\n- 🔄 Поворот фотографій\n- 💾 Режим заміни оригіналу"
+        "about_changelog": "**v5.7 Popup Editor:**\n- 🖼️ Редактор перенесено у модальне вікно\n- 📏 Покращено компонування інструментів\n- ✂️ Зручний кроп та поворот"
     },
     "en": {
-        "title": "📸 Watermarker Pro v5.6",
+        "title": "📸 Watermarker Pro v5.7",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
         
@@ -198,21 +200,23 @@ TRANSLATIONS = {
         "expander_add_files": "📤 Add Files",
         "lang_select": "Interface Language / Мова інтерфейсу",
         
-        "tgl_edit_mode": "🛠 Editor Mode",
+        # Editor Keys
+        "btn_open_editor": "🛠 Open Editor (Popup)",
+        "editor_title": "✂️ Image Editor",
         "lbl_aspect": "Aspect Ratio",
         "btn_rotate_left": "↺ -90°",
         "btn_rotate_right": "↻ +90°",
-        "btn_save_edit": "💾 Save & Replace",
+        "btn_save_edit": "💾 Save & Close",
         "msg_edit_saved": "Changes saved!",
         
         "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.6",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.7",
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v5.6 Image Editor:**\n- ✂️ Crop with fixed aspect ratios\n- 🔄 Image Rotation\n- 💾 Save & Replace mode"
+        "about_changelog": "**v5.7 Popup Editor:**\n- 🖼️ Editor moved to Modal Dialog\n- 📏 Improved tools layout\n- ✂️ Better Crop & Rotate UX"
     }
 }
 
@@ -345,6 +349,61 @@ def apply_settings_from_json(json_data):
             st.session_state['preset_wm_bytes_key'] = None
         return True
     except Exception as e: return str(e)
+
+# --- POPUP EDITOR (v5.7) ---
+@st.dialog("🛠 Editor", width="large")
+def open_editor_dialog(fpath, T):
+    st.caption(f"{os.path.basename(fpath)}")
+    
+    # Tools Toolbar
+    col_aspect, col_rot_l, col_rot_r = st.columns([2, 1, 1])
+    
+    with col_aspect:
+        aspect_choice = st.radio(
+            T['lbl_aspect'], 
+            list(ASPECT_RATIOS.keys()), 
+            horizontal=True, 
+            label_visibility="collapsed"
+        )
+        aspect_val = ASPECT_RATIOS[aspect_choice]
+        
+    with col_rot_l:
+        if st.button(T['btn_rotate_left'], use_container_width=True):
+            engine.rotate_image_file(fpath, 90)
+            st.rerun()
+            
+    with col_rot_r:
+        if st.button(T['btn_rotate_right'], use_container_width=True):
+            engine.rotate_image_file(fpath, -90)
+            st.rerun()
+            
+    st.divider()
+
+    # Cropper Area
+    try:
+        img_to_crop = Image.open(fpath)
+        img_to_crop = ImageOps.exif_transpose(img_to_crop)
+        
+        # Maximize width
+        cropped_img = st_cropper(
+            img_to_crop,
+            realtime_update=True,
+            box_color='#FF0000',
+            aspect_ratio=aspect_val,
+            should_resize_image=True # Important for large images in modal
+        )
+        
+        if st.button(T['btn_save_edit'], type="primary", use_container_width=True):
+            cropped_img.save(fpath, quality=95)
+            # Clear thumb cache
+            thumb_path = f"{fpath}.thumb.jpg"
+            if os.path.exists(thumb_path): os.remove(thumb_path)
+            st.toast(T['msg_edit_saved'])
+            st.rerun() # Close dialog by rerun (Streamlit behavior)
+            
+    except Exception as e:
+        st.error(f"Editor Error: {e}")
+
 
 # --- UI START ---
 with st.sidebar:
@@ -572,89 +631,43 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
-            # --- EDITOR MODE (v5.6) ---
-            edit_mode = st.toggle(T['tgl_edit_mode'], key='edit_mode_toggle')
-            
-            if edit_mode:
-                # Editor Logic
-                col_tools, col_crop = st.columns([1, 3])
-                
-                with col_tools:
-                    # Rotation
-                    st.caption("Rotate")
-                    c1, c2 = st.columns(2)
-                    if c1.button(T['btn_rotate_left'], use_container_width=True):
-                        engine.rotate_image_file(fpath, 90)
-                        st.rerun()
-                    if c2.button(T['btn_rotate_right'], use_container_width=True):
-                        engine.rotate_image_file(fpath, -90)
-                        st.rerun()
-                    
-                    st.divider()
-                    
-                    # Aspect Ratio
-                    aspect_choice = st.radio(T['lbl_aspect'], list(ASPECT_RATIOS.keys()))
-                    aspect_val = ASPECT_RATIOS[aspect_choice]
-                
-                with col_crop:
-                    # Load image for cropper
-                    try:
-                        img_to_crop = Image.open(fpath)
-                        # Fix orientation again just in case
-                        img_to_crop = ImageOps.exif_transpose(img_to_crop)
-                        
-                        cropped_img = st_cropper(
-                            img_to_crop,
-                            realtime_update=True,
-                            box_color='#FF0000',
-                            aspect_ratio=aspect_val
-                        )
-                        
-                        if st.button(T['btn_save_edit'], type="primary", use_container_width=True):
-                            cropped_img.save(fpath, quality=95)
-                            # Clear thumb cache
-                            thumb_path = f"{fpath}.thumb.jpg"
-                            if os.path.exists(thumb_path): os.remove(thumb_path)
-                            st.toast(T['msg_edit_saved'])
-                            st.rerun()
-                            
-                    except Exception as e:
-                        st.error(f"Editor Error: {e}")
+            # --- POPUP EDITOR TRIGGER (v5.7) ---
+            if st.button(T['btn_open_editor'], type="primary", use_container_width=True):
+                open_editor_dialog(fpath, T)
 
-            else:
-                # Normal Preview
-                wm_obj = None
-                try:
-                    if wm_text.strip():
-                        font_path = None
-                        if selected_font_name: font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
-                        wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
+            # Normal Preview
+            wm_obj = None
+            try:
+                if wm_text.strip():
+                    font_path = None
+                    if selected_font_name: font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
+                    wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
+                    if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                else:
+                    wm_bytes = None
+                    if wm_file: wm_bytes = wm_file.getvalue()
+                    elif st.session_state.get('preset_wm_bytes_key'): wm_bytes = st.session_state['preset_wm_bytes_key']
+                    if wm_bytes:
+                        wm_obj = engine.load_watermark_from_file(wm_bytes)
                         if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
-                    else:
-                        wm_bytes = None
-                        if wm_file: wm_bytes = wm_file.getvalue()
-                        elif st.session_state.get('preset_wm_bytes_key'): wm_bytes = st.session_state['preset_wm_bytes_key']
-                        if wm_bytes:
-                            wm_obj = engine.load_watermark_from_file(wm_bytes)
-                            if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
-                except: pass
+            except: pass
+            
+            resize_cfg = {
+                'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
+                'wm_scale': wm_scale, 'wm_margin': wm_margin if wm_pos!='tiled' else 0,
+                'wm_gap': wm_gap if wm_pos=='tiled' else 0,
+                'wm_position': wm_pos, 'wm_angle': wm_angle
+            }
+            
+            try:
+                preview_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), 1)
+                prev_bytes, stats = engine.process_image(fpath, preview_fname, wm_obj, resize_cfg, out_fmt, quality)
                 
-                resize_cfg = {
-                    'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
-                    'wm_scale': wm_scale, 'wm_margin': wm_margin if wm_pos!='tiled' else 0,
-                    'wm_gap': wm_gap if wm_pos=='tiled' else 0,
-                    'wm_position': wm_pos, 'wm_angle': wm_angle
-                }
-                
-                try:
-                    preview_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), 1)
-                    prev_bytes, stats = engine.process_image(fpath, preview_fname, wm_obj, resize_cfg, out_fmt, quality)
-                    
-                    st.image(prev_bytes, caption=f"{stats['filename']}", use_container_width=True)
-                    m1, m2 = st.columns(2)
-                    delta_size = ((stats['new_size'] - stats['orig_size']) / stats['orig_size']) * 100
-                    m1.metric(T['stat_res'], stats['new_res'], stats['scale_factor'])
-                    m2.metric(T['stat_size'], f"{stats['new_size']/1024:.1f} KB", f"{delta_size:.1f}%", delta_color="inverse")
-                except Exception as e: st.error(f"Preview Error: {e}")
+                st.image(prev_bytes, caption=f"{stats['filename']}", use_container_width=True)
+                m1, m2 = st.columns(2)
+                delta_size = ((stats['new_size'] - stats['orig_size']) / stats['orig_size']) * 100
+                m1.metric(T['stat_res'], stats['new_res'], stats['scale_factor'])
+                m2.metric(T['stat_size'], f"{stats['new_size']/1024:.1f} KB", f"{delta_size:.1f}%", delta_color="inverse")
+            except Exception as e: st.error(f"Preview Error: {e}")
         else:
             st.markdown(f"""<div class="preview-placeholder"><span class="preview-icon">🖼️</span><p>{T['prev_placeholder']}</p></div>""", unsafe_allow_html=True)
