@@ -12,9 +12,10 @@ from datetime import datetime
 from PIL import Image
 import watermarker_engine as engine
 import glob
+from streamlit_cropper import st_cropper # NEW LIBRARY
 
 # --- КОНФІГУРАЦІЯ ---
-st.set_page_config(page_title="Watermarker Pro v5.5", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Watermarker Pro v5.6", page_icon="📸", layout="wide")
 
 DEFAULT_SETTINGS = {
     'resize_val': 1920,
@@ -26,29 +27,39 @@ DEFAULT_SETTINGS = {
     'wm_angle': 0,
     'wm_text': '',
     'wm_text_color': '#FFFFFF',
-    # New defaults
     'out_fmt': 'JPEG',
     'out_quality': 80,
     'naming_mode': 'Keep Original',
     'naming_prefix': '',
     'font_name': None,
-    'preset_wm_bytes': None # Кеш для логотипу з пресету
+    'preset_wm_bytes': None
 }
 
 TILED_SETTINGS = {'wm_scale': 15, 'wm_opacity': 0.3, 'wm_gap': 30, 'wm_angle': 45}
 CORNER_SETTINGS = {'wm_scale': 15, 'wm_opacity': 1.0, 'wm_margin': 15, 'wm_angle': 0}
 
+# Aspect Ratios dictionary for Crop
+ASPECT_RATIOS = {
+    "Free / Вільний": None,
+    "1:1 (Square)": (1, 1),
+    "3:2 (Classic)": (3, 2),
+    "4:3 (Standard)": (4, 3),
+    "5:4 (Insta Portrait)": (5, 4),
+    "16:9 (Wide)": (16, 9),
+    "9:16 (Stories/Reels)": (9, 16)
+}
+
 # --- ЛОКАЛІЗАЦІЯ ---
 TRANSLATIONS = {
     "ua": {
-        "title": "📸 Watermarker Pro v5.5",
+        "title": "📸 Watermarker Pro v5.6",
         "sb_config": "🛠 Налаштування",
         "btn_defaults": "↺ Скинути налаштування",
         
         "sec_presets": "💾 Менеджер пресетів",
         "lbl_load_preset": "Завантажити пресет (.json)",
         "btn_save_preset": "⬇️ Зберегти повний пресет",
-        "msg_preset_loaded": "✅ Пресет завантажено (лого, шрифти, налаштування)!",
+        "msg_preset_loaded": "✅ Пресет завантажено!",
         "error_preset": "❌ Помилка пресету: {}",
         
         "sec_file": "1. Файл та Ім'я",
@@ -69,7 +80,7 @@ TRANSLATIONS = {
         "lbl_text_input": "Текст вотермарки",
         "lbl_font": "Шрифт",
         "lbl_color": "Колір",
-        "msg_preset_logo_active": "ℹ️ Використовується логотип із пресету. Завантажте новий файл, щоб замінити його.",
+        "msg_preset_logo_active": "ℹ️ Логотип із пресету активний.",
         
         "lbl_pos": "Позиція",
         "opt_pos_tile": "Замощення (Паттерн)",
@@ -81,7 +92,7 @@ TRANSLATIONS = {
         
         "sec_perf": "⚙️ Продуктивність",
         "lbl_threads": "Потоки (Threads)",
-        "help_threads": "Зменшіть це число, якщо програма вилітає з помилкою.",
+        "help_threads": "Зменшіть число, якщо вилітає.",
         
         "files_header": "📂 Робоча область", 
         "uploader_label": "Завантажити фото",
@@ -103,27 +114,35 @@ TRANSLATIONS = {
         "btn_select": "⬜ Обрати",
         "warn_no_files": "⚠️ Спочатку оберіть файли!",
         "btn_clear_workspace": "♻️ Очистити все",
-        "expander_add_files": "📤 Додати файли (Drag & Drop)",
+        "expander_add_files": "📤 Додати файли",
         "lang_select": "Мова інтерфейсу / Interface Language",
         
+        # Editor Keys
+        "tgl_edit_mode": "🛠 Editor Mode / Редагування",
+        "lbl_aspect": "Пропорції",
+        "btn_rotate_left": "↺ -90°",
+        "btn_rotate_right": "↻ +90°",
+        "btn_save_edit": "💾 Зберегти та Замінити",
+        "msg_edit_saved": "Зміни збережено!",
+        
         "about_expander": "ℹ️ Про програму",
-        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.5",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.6",
         "about_auth": "**Автор:** Marynyuk Andriy", 
         "about_lic": "**Ліцензія:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 Всі права захищено",
         "about_changelog_title": "📝 Історія змін",
-        "about_changelog": "**v5.5 Full Presets:**\n- 💾 Пресети тепер зберігають Логотип (всередині файлу)\n- 💾 Збереження шрифтів, форматів та іменування\n- ⚡ Виправлено відображення даних після завантаження"
+        "about_changelog": "**v5.6 Image Editor:**\n- ✂️ Кроп (Обрізка) з фіксованими пропорціями\n- 🔄 Поворот фотографій\n- 💾 Режим заміни оригіналу"
     },
     "en": {
-        "title": "📸 Watermarker Pro v5.5",
+        "title": "📸 Watermarker Pro v5.6",
         "sb_config": "🛠 Configuration",
         "btn_defaults": "↺ Reset",
         
         "sec_presets": "💾 Presets Manager",
         "lbl_load_preset": "Load Preset (.json)",
         "btn_save_preset": "⬇️ Save Full Preset",
-        "msg_preset_loaded": "✅ Preset loaded (logo, fonts, settings included)!",
+        "msg_preset_loaded": "✅ Preset loaded!",
         "error_preset": "❌ Preset error: {}",
         
         "sec_file": "1. File & Naming",
@@ -144,7 +163,7 @@ TRANSLATIONS = {
         "lbl_text_input": "Watermark Text",
         "lbl_font": "Font",
         "lbl_color": "Color",
-        "msg_preset_logo_active": "ℹ️ Using logo from preset. Upload new file to override.",
+        "msg_preset_logo_active": "ℹ️ Using logo from preset.",
         
         "lbl_pos": "Position",
         "opt_pos_tile": "Tiled (Pattern)",
@@ -178,17 +197,25 @@ TRANSLATIONS = {
         "btn_select": "⬜ Select",
         "warn_no_files": "⚠️ Select files first!",
         "btn_clear_workspace": "♻️ Clear Workspace",
-        "expander_add_files": "📤 Add Files (Drag & Drop)",
+        "expander_add_files": "📤 Add Files",
         "lang_select": "Interface Language / Мова інтерфейсу",
         
+        # Editor Keys
+        "tgl_edit_mode": "🛠 Editor Mode",
+        "lbl_aspect": "Aspect Ratio",
+        "btn_rotate_left": "↺ -90°",
+        "btn_rotate_right": "↻ +90°",
+        "btn_save_edit": "💾 Save & Replace",
+        "msg_edit_saved": "Changes saved!",
+        
         "about_expander": "ℹ️ About",
-        "about_prod": "**Product:** Watermarker Pro MaAn v5.5",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.6",
         "about_auth": "**Author:** Marynyuk Andriy", 
         "about_lic": "**License:** Proprietary", 
         "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
         "about_copy": "© 2025 All rights reserved",
         "about_changelog_title": "📝 Changelog",
-        "about_changelog": "**v5.5 Full Presets:**\n- 💾 Presets now include Logo (Base64 encoded)\n- 💾 Saving fonts, formats, and naming\n- ⚡ Fixed UI update after loading"
+        "about_changelog": "**v5.6 Image Editor:**\n- ✂️ Crop with fixed aspect ratios\n- 🔄 Image Rotation\n- 💾 Save & Replace mode"
     }
 }
 
@@ -196,15 +223,11 @@ TRANSLATIONS = {
 st.markdown("""
 <style>
     div[data-testid="column"] {
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        padding: 10px;
-        border: 1px solid #eee;
-        transition: all 0.2s ease;
+        background-color: #f8f9fa; border-radius: 8px; padding: 10px;
+        border: 1px solid #eee; transition: all 0.2s ease;
     }
     div[data-testid="column"]:hover {
-        border-color: #ff4b4b;
-        transform: translateY(-2px);
+        border-color: #ff4b4b; transform: translateY(-2px);
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     div[data-testid="column"] button { width: 100%; margin-top: 5px; }
@@ -275,52 +298,35 @@ def reset_settings():
     st.session_state['naming_mode_key'] = DEFAULT_SETTINGS['naming_mode']
     st.session_state['naming_prefix_key'] = DEFAULT_SETTINGS['naming_prefix']
     st.session_state['font_name_key'] = DEFAULT_SETTINGS['font_name']
-    st.session_state['preset_wm_bytes_key'] = None # Clear loaded logo
+    st.session_state['preset_wm_bytes_key'] = None
 
 def get_current_settings_json(uploaded_wm_file):
-    """Збирає всі налаштування + картинку лого в JSON."""
-    
-    # Спроба отримати байти логотипу: або з завантаження, або з кешу
     wm_b64 = None
-    if uploaded_wm_file:
-        wm_b64 = engine.image_to_base64(uploaded_wm_file.getvalue())
-    elif st.session_state.get('preset_wm_bytes_key'):
-        wm_b64 = engine.image_to_base64(st.session_state['preset_wm_bytes_key'])
+    if uploaded_wm_file: wm_b64 = engine.image_to_base64(uploaded_wm_file.getvalue())
+    elif st.session_state.get('preset_wm_bytes_key'): wm_b64 = engine.image_to_base64(st.session_state['preset_wm_bytes_key'])
         
     settings = {
-        # Geometry
         'resize_val': st.session_state.get('resize_val_state', 1920),
-        
-        # Watermark Look
         'wm_pos': st.session_state.get('wm_pos_key', 'bottom-right'),
         'wm_scale': st.session_state.get('wm_scale_key', 15),
         'wm_opacity': st.session_state.get('wm_opacity_key', 1.0),
         'wm_margin': st.session_state.get('wm_margin_key', 15),
         'wm_gap': st.session_state.get('wm_gap_key', 30),
         'wm_angle': st.session_state.get('wm_angle_key', 0),
-        
-        # Text
         'wm_text': st.session_state.get('wm_text_key', ''),
         'wm_text_color': st.session_state.get('wm_text_color_key', '#FFFFFF'),
         'font_name': st.session_state.get('font_name_key', None),
-        
-        # Files (Added in v5.5)
         'out_fmt': st.session_state.get('out_fmt_key', 'JPEG'),
         'out_quality': st.session_state.get('out_quality_key', 80),
         'naming_mode': st.session_state.get('naming_mode_key', 'Keep Original'),
         'naming_prefix': st.session_state.get('naming_prefix_key', ''),
-        
-        # Logo File (Base64)
         'wm_image_b64': wm_b64
     }
     return json.dumps(settings, indent=4)
 
 def apply_settings_from_json(json_data):
-    """Завантажує налаштування і картинку в Session State."""
     try:
         data = json.load(json_data)
-        
-        # Basic
         if 'resize_val' in data: st.session_state['resize_val_state'] = data['resize_val']
         if 'wm_pos' in data: st.session_state['wm_pos_key'] = data['wm_pos']
         if 'wm_scale' in data: st.session_state['wm_scale_key'] = data['wm_scale']
@@ -328,69 +334,46 @@ def apply_settings_from_json(json_data):
         if 'wm_margin' in data: st.session_state['wm_margin_key'] = data['wm_margin']
         if 'wm_gap' in data: st.session_state['wm_gap_key'] = data['wm_gap']
         if 'wm_angle' in data: st.session_state['wm_angle_key'] = data['wm_angle']
-        
-        # Text
         if 'wm_text' in data: st.session_state['wm_text_key'] = data['wm_text']
         if 'wm_text_color' in data: st.session_state['wm_text_color_key'] = data['wm_text_color']
         if 'font_name' in data: st.session_state['font_name_key'] = data['font_name']
-        
-        # Files
         if 'out_fmt' in data: st.session_state['out_fmt_key'] = data['out_fmt']
         if 'out_quality' in data: st.session_state['out_quality_key'] = data['out_quality']
         if 'naming_mode' in data: st.session_state['naming_mode_key'] = data['naming_mode']
         if 'naming_prefix' in data: st.session_state['naming_prefix_key'] = data['naming_prefix']
         
-        # Decode Logo
         if 'wm_image_b64' in data and data['wm_image_b64']:
             img_bytes = engine.base64_to_bytes(data['wm_image_b64'])
             st.session_state['preset_wm_bytes_key'] = img_bytes
         else:
             st.session_state['preset_wm_bytes_key'] = None
-            
         return True
-    except Exception as e:
-        return str(e)
+    except Exception as e: return str(e)
 
 # --- UI START ---
 with st.sidebar:
     lang_code = st.session_state['lang_code']
     T = TRANSLATIONS[lang_code]
-    
     st.header(T['sb_config'])
     
-    # --- PRESETS ---
     with st.expander(T['sec_presets'], expanded=False):
         uploaded_preset = st.file_uploader(T['lbl_load_preset'], type=['json'], key='preset_uploader')
         if uploaded_preset is not None:
-            # Check if processed in this run to avoid infinite loop
             if f"processed_{uploaded_preset.name}" not in st.session_state:
                 res = apply_settings_from_json(uploaded_preset)
                 if res is True:
                     st.session_state[f"processed_{uploaded_preset.name}"] = True
-                    st.success(T['msg_preset_loaded'])
-                    st.rerun() # Refresh widgets
-                else:
-                    st.error(T['error_preset'].format(res))
-        
+                    st.success(T['msg_preset_loaded']); st.rerun()
+                else: st.error(T['error_preset'].format(res))
         st.divider()
-        # Pass the current file uploader object to save its content
         current_wm_file = st.session_state.get('wm_uploader_obj') 
         json_str = get_current_settings_json(current_wm_file)
-        
-        st.download_button(
-            label=T['btn_save_preset'],
-            data=json_str,
-            file_name="wm_preset_full.json",
-            mime="application/json",
-            use_container_width=True
-        )
+        st.download_button(label=T['btn_save_preset'], data=json_str, file_name="wm_preset_full.json", mime="application/json", use_container_width=True)
 
     with st.expander(T['sec_file']):
-        # Bind keys to session state
         out_fmt = st.selectbox(T['lbl_format'], ["JPEG", "WEBP", "PNG"], key='out_fmt_key')
         quality = 80
-        if out_fmt != "PNG": 
-            quality = st.slider(T['lbl_quality'], 50, 100, 80, 5, key='out_quality_key')
+        if out_fmt != "PNG": quality = st.slider(T['lbl_quality'], 50, 100, 80, 5, key='out_quality_key')
         naming_mode = st.selectbox(T['lbl_naming'], ["Keep Original", "Prefix + Sequence"], key='naming_mode_key')
         prefix = st.text_input(T['lbl_prefix'], placeholder="img", key='naming_prefix_key')
 
@@ -407,45 +390,32 @@ with st.sidebar:
     with st.expander(T['sec_wm'], expanded=True):
         tab1, tab2 = st.tabs([T['tab_logo'], T['tab_text']])
         wm_type = "image"
-        
         with tab1:
-            # Save object to session to access bytes for saving later
             wm_file = st.file_uploader(T['lbl_logo_up'], type=["png"], key="wm_uploader")
             st.session_state['wm_uploader_obj'] = wm_file
-            
-            if wm_file: 
-                wm_type = "image"
+            if wm_file: wm_type = "image"
             elif st.session_state.get('preset_wm_bytes_key'):
                 wm_type = "image"
                 st.info(T['msg_preset_logo_active'])
-                # Preview preset logo
                 try:
                     p_img = Image.open(io.BytesIO(st.session_state['preset_wm_bytes_key']))
                     st.image(p_img, width=150)
                 except: pass
-
         with tab2:
             wm_text = st.text_area(T['lbl_text_input'], key='wm_text_key')
             fonts = get_available_fonts()
-            
-            # Smart font selection index
             f_idx = 0
             current_f = st.session_state.get('font_name_key')
-            if current_f and current_f in fonts:
-                f_idx = fonts.index(current_f)
-            
+            if current_f and current_f in fonts: f_idx = fonts.index(current_f)
             selected_font_name = st.selectbox(T['lbl_font'], fonts, index=f_idx, key='font_name_key') if fonts else None
-            
             if not fonts: st.caption("No fonts found in assets/fonts. Using default.")
             wm_text_color = st.color_picker(T['lbl_color'], '#FFFFFF', key='wm_text_color_key')
             if wm_text: wm_type = "text"
 
         st.divider()
-        wm_pos = st.selectbox(T['lbl_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], 
-                              key='wm_pos_key', on_change=handle_pos_change)
+        wm_pos = st.selectbox(T['lbl_pos'], ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center', 'tiled'], key='wm_pos_key', on_change=handle_pos_change)
         wm_scale = st.slider(T['lbl_scale'], 5, 100, key='wm_scale_key') / 100
         wm_opacity = st.slider(T['lbl_opacity'], 0.1, 1.0, key='wm_opacity_key')
-        
         if wm_pos == 'tiled':
             wm_gap = st.slider(T['lbl_gap'], 0, 200, key='wm_gap_key')
             wm_margin = wm_gap
@@ -460,34 +430,27 @@ with st.sidebar:
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
-    # --- ABOUT SECTION ---
     with st.expander(T['about_expander'], expanded=False):
         st.markdown(T['about_prod'])
         st.markdown(T['about_auth'])
         st.markdown(T['about_lic'])
         st.markdown(T['about_repo'])
         st.caption(T['about_copy'])
-        
-        with st.expander(T['about_changelog_title']):
-            st.markdown(T['about_changelog'])
-            
+        with st.expander(T['about_changelog_title']): st.markdown(T['about_changelog'])
         st.divider()
         st.caption(T['lang_select'])
-        lang_col1, lang_col2 = st.columns(2)
-        with lang_col1:
-            if st.button("🇺🇦 UA", type="primary" if lang_code == 'ua' else "secondary", use_container_width=True):
-                st.session_state['lang_code'] = 'ua'; st.rerun()
-        with lang_col2:
-            if st.button("🇺🇸 EN", type="primary" if lang_code == 'en' else "secondary", use_container_width=True):
-                st.session_state['lang_code'] = 'en'; st.rerun()
+        lc1, lc2 = st.columns(2)
+        with lc1:
+            if st.button("🇺🇦 UA", type="primary" if lang_code=='ua' else "secondary", use_container_width=True): st.session_state['lang_code']='ua'; st.rerun()
+        with lc2:
+            if st.button("🇺🇸 EN", type="primary" if lang_code=='en' else "secondary", use_container_width=True): st.session_state['lang_code']='en'; st.rerun()
 
 st.title(T['title'])
 c_left, c_right = st.columns([1.8, 1], gap="large")
 
 with c_left:
     col_head, col_clear = st.columns([2, 1])
-    with col_head:
-        st.subheader(T['files_header'])
+    with col_head: st.subheader(T['files_header'])
     with col_clear:
         if st.button(T['btn_clear_workspace'], type="secondary", use_container_width=True):
             st.session_state['file_cache'] = {}
@@ -516,23 +479,17 @@ with c_left:
     if files_names:
         act1, act2, act3 = st.columns([1, 1, 1])
         with act1:
-            if st.button(T['grid_select_all'], use_container_width=True):
-                st.session_state['selected_files'] = set(files_names)
-                st.rerun()
+            if st.button(T['grid_select_all'], use_container_width=True): st.session_state['selected_files'] = set(files_names); st.rerun()
         with act2:
-            if st.button(T['grid_deselect_all'], use_container_width=True):
-                st.session_state['selected_files'].clear()
-                st.rerun()
+            if st.button(T['grid_deselect_all'], use_container_width=True): st.session_state['selected_files'].clear(); st.rerun()
         with act3:
             sel_count = len(st.session_state['selected_files'])
             if st.button(f"{T['grid_delete']} ({sel_count})", type="primary", use_container_width=True, disabled=sel_count==0):
                 for f in list(st.session_state['selected_files']):
                     if f in files_map: del files_map[f]
-                st.session_state['selected_files'].clear()
-                st.rerun()
+                st.session_state['selected_files'].clear(); st.rerun()
         
         st.divider()
-        
         cols_count = 4
         cols = st.columns(cols_count)
         
@@ -543,7 +500,6 @@ with c_left:
                 thumb = engine.get_thumbnail(fpath)
                 if thumb: st.image(thumb, use_container_width=True)
                 else: st.warning("Error")
-                
                 is_sel = fname in st.session_state['selected_files']
                 if st.button(T['btn_selected'] if is_sel else T['btn_select'], key=f"btn_{fname}", type="primary" if is_sel else "secondary", use_container_width=True):
                     if is_sel: st.session_state['selected_files'].remove(fname)
@@ -551,41 +507,28 @@ with c_left:
                     st.rerun()
 
         st.caption(f"Files: {len(files_names)} | Selected: {len(st.session_state['selected_files'])}")
-        
         process_list = list(st.session_state['selected_files'])
         can_process = len(process_list) > 0
         
         if st.button(T['btn_process'], type="primary", use_container_width=True):
-            if not can_process:
-                st.warning(T['warn_no_files'])
+            if not can_process: st.warning(T['warn_no_files'])
             else:
                 progress = st.progress(0)
-                
-                # --- PREPARE WM (UPDATED FOR PRESETS) ---
                 wm_obj = None
                 try:
                     if wm_text.strip():
-                        # Text Mode
                         font_path = None
-                        if selected_font_name:
-                            font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
+                        if selected_font_name: font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
                         wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
                         wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
                     else:
-                        # Image Mode: Check Upload -> Check Preset
                         wm_bytes = None
-                        if wm_file:
-                            wm_bytes = wm_file.getvalue()
-                        elif st.session_state.get('preset_wm_bytes_key'):
-                            wm_bytes = st.session_state['preset_wm_bytes_key']
-                            
+                        if wm_file: wm_bytes = wm_file.getvalue()
+                        elif st.session_state.get('preset_wm_bytes_key'): wm_bytes = st.session_state['preset_wm_bytes_key']
                         if wm_bytes:
                             wm_obj = engine.load_watermark_from_file(wm_bytes)
                             wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
-
-                except Exception as e:
-                    st.error(T['error_wm_load'].format(e))
-                    st.stop()
+                except Exception as e: st.error(T['error_wm_load'].format(e)); st.stop()
                 
                 resize_cfg = {
                     'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
@@ -593,10 +536,7 @@ with c_left:
                     'wm_gap': wm_gap if wm_pos=='tiled' else 0,
                     'wm_position': wm_pos, 'wm_angle': wm_angle
                 }
-                
-                results = []
-                report = []
-                zip_buffer = io.BytesIO()
+                results = []; report = []; zip_buffer = io.BytesIO()
                 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
                     futures = {}
@@ -611,13 +551,10 @@ with c_left:
                             try:
                                 res_bytes, stats = fut.result()
                                 zf.writestr(stats['filename'], res_bytes)
-                                results.append((stats['filename'], res_bytes))
-                                report.append(stats)
-                                del res_bytes
-                                gc.collect()
+                                results.append((stats['filename'], res_bytes)); report.append(stats)
+                                del res_bytes; gc.collect()
                             except Exception as e: st.error(f"Error {futures[fut]}: {e}")
                             progress.progress((i+1)/len(process_list))
-                
                 st.session_state['results'] = {'zip': zip_buffer.getvalue(), 'files': results, 'report': report}
                 st.toast(T['msg_done'], icon='🎉')
 
@@ -628,8 +565,7 @@ with c_left:
         with st.expander(T['exp_dl_separate']):
             for name, data in res['files']:
                 c1, c2 = st.columns([3, 1])
-                c1.write(f"📄 {name}")
-                c2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
+                c1.write(f"📄 {name}"); c2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
 
 with c_right:
     st.subheader(T['prev_header'])
@@ -640,41 +576,91 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
-            # --- LIVE PREVIEW (UPDATED) ---
-            wm_obj = None
-            try:
-                if wm_text.strip():
-                    font_path = None
-                    if selected_font_name:
-                        font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
-                    wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
-                    if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
-                else:
-                    wm_bytes = None
-                    if wm_file: wm_bytes = wm_file.getvalue()
-                    elif st.session_state.get('preset_wm_bytes_key'): wm_bytes = st.session_state['preset_wm_bytes_key']
-                    
-                    if wm_bytes:
-                        wm_obj = engine.load_watermark_from_file(wm_bytes)
-                        if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
-            except: pass
+            # --- EDITOR MODE (v5.6) ---
+            edit_mode = st.toggle(T['tgl_edit_mode'], key='edit_mode_toggle')
             
-            resize_cfg = {
-                'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
-                'wm_scale': wm_scale, 'wm_margin': wm_margin if wm_pos!='tiled' else 0,
-                'wm_gap': wm_gap if wm_pos=='tiled' else 0,
-                'wm_position': wm_pos, 'wm_angle': wm_angle
-            }
-            
-            try:
-                preview_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), 1)
-                prev_bytes, stats = engine.process_image(fpath, preview_fname, wm_obj, resize_cfg, out_fmt, quality)
+            if edit_mode:
+                # Editor Logic
+                col_tools, col_crop = st.columns([1, 3])
                 
-                st.image(prev_bytes, caption=f"{stats['filename']}", use_container_width=True)
-                m1, m2 = st.columns(2)
-                delta_size = ((stats['new_size'] - stats['orig_size']) / stats['orig_size']) * 100
-                m1.metric(T['stat_res'], stats['new_res'], stats['scale_factor'])
-                m2.metric(T['stat_size'], f"{stats['new_size']/1024:.1f} KB", f"{delta_size:.1f}%", delta_color="inverse")
-            except Exception as e: st.error(f"Preview Error: {e}")
+                with col_tools:
+                    # Rotation
+                    st.caption("Rotate")
+                    c1, c2 = st.columns(2)
+                    if c1.button(T['btn_rotate_left'], use_container_width=True):
+                        engine.rotate_image_file(fpath, 90) # Left is positive for PIL? No, usually counter-clockwise is positive
+                        st.rerun()
+                    if c2.button(T['btn_rotate_right'], use_container_width=True):
+                        engine.rotate_image_file(fpath, -90)
+                        st.rerun()
+                    
+                    st.divider()
+                    
+                    # Aspect Ratio
+                    aspect_choice = st.radio(T['lbl_aspect'], list(ASPECT_RATIOS.keys()))
+                    aspect_val = ASPECT_RATIOS[aspect_choice]
+                
+                with col_crop:
+                    # Load image for cropper
+                    # We need to open it fresh
+                    try:
+                        img_to_crop = Image.open(fpath)
+                        # Fix orientation again just in case, though rotate_image_file handles it
+                        img_to_crop = ImageOps.exif_transpose(img_to_crop)
+                        
+                        cropped_img = st_cropper(
+                            img_to_crop,
+                            realtime_update=True,
+                            box_color='#FF0000',
+                            aspect_ratio=aspect_val
+                        )
+                        
+                        if st.button(T['btn_save_edit'], type="primary", use_container_width=True):
+                            # Save the cropped image back to fpath
+                            cropped_img.save(fpath, quality=95)
+                            # Clear thumbnail cache
+                            thumb_path = f"{fpath}.thumb.jpg"
+                            if os.path.exists(thumb_path): os.remove(thumb_path)
+                            st.toast(T['msg_edit_saved'])
+                            st.rerun()
+                            
+                    except Exception as e:
+                        st.error(f"Editor Error: {e}")
+
+            else:
+                # Normal Preview Logic
+                wm_obj = None
+                try:
+                    if wm_text.strip():
+                        font_path = None
+                        if selected_font_name: font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
+                        wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
+                        if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                    else:
+                        wm_bytes = None
+                        if wm_file: wm_bytes = wm_file.getvalue()
+                        elif st.session_state.get('preset_wm_bytes_key'): wm_bytes = st.session_state['preset_wm_bytes_key']
+                        if wm_bytes:
+                            wm_obj = engine.load_watermark_from_file(wm_bytes)
+                            if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                except: pass
+                
+                resize_cfg = {
+                    'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
+                    'wm_scale': wm_scale, 'wm_margin': wm_margin if wm_pos!='tiled' else 0,
+                    'wm_gap': wm_gap if wm_pos=='tiled' else 0,
+                    'wm_position': wm_pos, 'wm_angle': wm_angle
+                }
+                
+                try:
+                    preview_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), 1)
+                    prev_bytes, stats = engine.process_image(fpath, preview_fname, wm_obj, resize_cfg, out_fmt, quality)
+                    
+                    st.image(prev_bytes, caption=f"{stats['filename']}", use_container_width=True)
+                    m1, m2 = st.columns(2)
+                    delta_size = ((stats['new_size'] - stats['orig_size']) / stats['orig_size']) * 100
+                    m1.metric(T['stat_res'], stats['new_res'], stats['scale_factor'])
+                    m2.metric(T['stat_size'], f"{stats['new_size']/1024:.1f} KB", f"{delta_size:.1f}%", delta_color="inverse")
+                except Exception as e: st.error(f"Preview Error: {e}")
         else:
             st.markdown(f"""<div class="preview-placeholder"><span class="preview-icon">🖼️</span><p>{T['prev_placeholder']}</p></div>""", unsafe_allow_html=True)
