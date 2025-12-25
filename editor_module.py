@@ -4,12 +4,11 @@ from PIL import Image, ImageOps
 from streamlit_cropper import st_cropper
 
 """
-Editor Module v5.12 (Fixed & Compact)
--------------------------------------
+Editor Module v6.1 (Fix)
+------------------------
 Fixes:
-- Added lock_aspect_ratio (User cannot break aspect)
-- Compact layout (Reduced vertical space)
-- Removed redundant reruns inside logic where possible
+- Removed invalid argument 'lock_aspect_ratio' causing crash
+- Optimized imports
 """
 
 ASPECT_RATIOS = {
@@ -26,13 +25,11 @@ def get_file_info_str(fpath: str, img: Image.Image):
     size_bytes = os.path.getsize(fpath)
     size_mb = size_bytes / (1024 * 1024)
     size_str = f"{size_mb:.2f} MB" if size_mb >= 1 else f"{size_bytes/1024:.1f} KB"
-    # Компактний рядок в один рядок
     return f"📄 **{os.path.basename(fpath)}** &nbsp;•&nbsp; 📏 **{img.width}x{img.height}** &nbsp;•&nbsp; 💾 **{size_str}**"
 
 @st.dialog("🛠 Editor", width="large")
 def open_editor_dialog(fpath: str, T: dict):
     # --- SESSION STATE ---
-    # Використовуємо ID файлу для унікальності ключів віджетів
     file_id = os.path.basename(fpath)
     
     if f'rot_{file_id}' not in st.session_state: st.session_state[f'rot_{file_id}'] = 0
@@ -43,7 +40,7 @@ def open_editor_dialog(fpath: str, T: dict):
         img_original = Image.open(fpath)
         img_original = ImageOps.exif_transpose(img_original)
         
-        # Застосовуємо поворот в пам'яті
+        # Rotation in memory
         current_angle = st.session_state[f'rot_{file_id}']
         if current_angle != 0:
             img_original = img_original.rotate(-current_angle, expand=True)
@@ -53,16 +50,15 @@ def open_editor_dialog(fpath: str, T: dict):
         st.error(f"Error: {e}")
         return
 
-    # 1. INFO BAR (Very Compact)
+    # 1. INFO BAR
     st.caption(get_file_info_str(fpath, img_original))
 
     # --- LAYOUT ---
-    # Змінюємо пропорції: більше місця для канвасу, менше для меню
     col_canvas, col_controls = st.columns([3, 1], gap="small")
 
     # --- RIGHT: CONTROLS ---
     with col_controls:
-        # A. Rotate (Icons only to save space)
+        # A. Rotate
         c_rot1, c_rot2 = st.columns(2)
         with c_rot1:
             if st.button("↺", use_container_width=True, key=f"btn_l_{file_id}", help="-90°"):
@@ -95,27 +91,25 @@ def open_editor_dialog(fpath: str, T: dict):
     with col_canvas:
         cropper_key = f"cropper_{file_id}_{st.session_state[f'reset_{file_id}']}"
         
-        # ВАЖЛИВО: lock_aspect_ratio блокує зміну пропорцій мишкою
+        # FIXED: Removed 'lock_aspect_ratio' argument
         cropped_img = st_cropper(
             img_original,
             realtime_update=True,
             box_color='#FF4B4B',
             aspect_ratio=aspect_val,
-            lock_aspect_ratio=(aspect_val is not None), # Блокуємо якщо не Free
-            should_resize_image=True,
+            # Якщо aspect_val задано, бібліотека сама заблокує пропорції
+            should_resize_image=True, 
             key=cropper_key
         )
 
     # --- RIGHT: PREVIEW & SAVE ---
     with col_controls:
-        # Міні-прев'ю (висота обмежена, щоб не розтягувати вікно)
         st.image(cropped_img, use_container_width=True)
         
         new_w, new_h = cropped_img.size
         color_tag = "red" if (new_w != orig_w or new_h != orig_h) else "green"
         st.caption(f"Result: :{color_tag}[{new_w}x{new_h}]")
         
-        # Save Button
         if st.button(T['btn_save_edit'], type="primary", use_container_width=True, key=f"save_{file_id}"):
             try:
                 cropped_img.save(fpath, quality=95, subsampling=0)
@@ -126,7 +120,6 @@ def open_editor_dialog(fpath: str, T: dict):
                 del st.session_state[f'rot_{file_id}']
                 del st.session_state[f'reset_{file_id}']
                 
-                # Close Dialog Signal
                 st.session_state['close_editor'] = True
                 st.rerun()
             except Exception as e:
