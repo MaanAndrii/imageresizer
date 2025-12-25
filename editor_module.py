@@ -4,21 +4,21 @@ from PIL import Image, ImageOps
 from streamlit_cropper import st_cropper
 
 """
-Editor Module v6.7 (Clamp Fix)
-------------------------------
-1. Removed manual Proxy scaling (caused coordinate drift).
-2. Added strict mathematical clamping (cannot exceed original size).
-3. Using 'should_resize_image=True' with original to let library handle display ratio.
+Editor Module v6.8 (Calculated MAX)
+-----------------------------------
+Feature:
+- "MAX" button now mathematically calculates the largest possible crop box
+  for the selected aspect ratio and forces the cropper to use it.
 """
 
 ASPECT_RATIOS = {
     "Free / Вільний": None,
-    "1:1 (Square)": (1, 1),
-    "3:2": (3, 2),
-    "4:3": (4, 3),
-    "5:4": (5, 4),
-    "16:9": (16, 9),
-    "9:16": (9, 16)
+    "1:1 (Square)": 1/1,
+    "3:2": 3/2,
+    "4:3": 4/3,
+    "5:4": 5/4,
+    "16:9": 16/9,
+    "9:16": 9/16
 }
 
 def get_file_info_str(fpath: str, img: Image.Image):
@@ -27,47 +27,46 @@ def get_file_info_str(fpath: str, img: Image.Image):
     size_str = f"{size_mb:.2f} MB" if size_mb >= 1 else f"{size_bytes/1024:.1f} KB"
     return f"📄 **{os.path.basename(fpath)}** &nbsp;•&nbsp; 📏 **{img.width}x{img.height}** &nbsp;•&nbsp; 💾 **{size_str}**"
 
-def clamp_coordinates(rect: dict, max_w: int, max_h: int):
+def get_max_box(img_w, img_h, aspect_ratio):
     """
-    Жорстко обрізає координати, щоб вони не виходили за межі зображення.
-    Виправляє баг '1639px on 960px image'.
+    Рахує координати (top, left, height, width) для максимальної рамки.
     """
-    if not rect: return None
+    if aspect_ratio is None:
+        # Free mode: Весь розмір
+        return (0, 0, img_h, img_w)
     
-    # 1. Округляємо
-    left = int(rect['left'])
-    top = int(rect['top'])
-    width = int(rect['width'])
-    height = int(rect['height'])
+    # Спробуємо вписати по висоті
+    target_h = img_h
+    target_w = int(target_h * aspect_ratio)
     
-    # 2. Обмежуємо початок (не менше 0)
-    left = max(0, left)
-    top = max(0, top)
+    if target_w > img_w:
+        # Не влізло по ширині, вписуємо по ширині
+        target_w = img_w
+        target_h = int(target_w / aspect_ratio)
     
-    # 3. Обмежуємо кінець (початок + ширина не більше максимуму)
-    # Якщо рамка вилізла, зменшуємо ширину/висоту
-    if left + width > max_w:
-        width = max_w - left
-    if top + height > max_h:
-        height = max_h - top
-        
-    return (left, top, left + width, top + height), width, height
+    # Центруємо
+    left = (img_w - target_w) // 2
+    top = (img_h - target_h) // 2
+    
+    return (top, left, target_h, target_w)
 
 @st.dialog("🛠 Editor", width="large")
 def open_editor_dialog(fpath: str, T: dict):
     file_id = os.path.basename(fpath)
     
-    # State Keys
+    # Init State
     if f'rot_{file_id}' not in st.session_state: st.session_state[f'rot_{file_id}'] = 0
     if f'reset_{file_id}' not in st.session_state: st.session_state[f'reset_{file_id}'] = 0
+    # Зберігаємо кастомні координати для кнопки MAX
+    if f'def_coords_{file_id}' not in st.session_state: st.session_state[f'def_coords_{file_id}'] = None
 
-    # 1. LOAD ORIGINAL
+    # Load Image
     try:
         img_full = Image.open(fpath)
         img_full = ImageOps.exif_transpose(img_full)
         img_full = img_full.convert('RGB')
         
-        # Віртуальний поворот
+        # Apply Rotation
         angle = st.session_state[f'rot_{file_id}']
         if angle != 0:
             img_full = img_full.rotate(-angle, expand=True)
@@ -77,28 +76,28 @@ def open_editor_dialog(fpath: str, T: dict):
         st.error(f"Load Error: {e}")
         return
 
-    # Info Bar
     st.caption(get_file_info_str(fpath, img_full))
 
-    # --- UI LAYOUT ---
     col_canvas, col_controls = st.columns([3, 1], gap="small")
 
-    # --- RIGHT PANEL (CONTROLS) ---
+    # --- CONTROLS ---
     with col_controls:
-        # A. Rotate
+        # Rotate
         c1, c2 = st.columns(2)
         with c1:
             if st.button("↺", use_container_width=True, key=f"l_{file_id}"):
                 st.session_state[f'rot_{file_id}'] -= 90
                 st.session_state[f'reset_{file_id}'] += 1
+                st.session_state[f'def_coords_{file_id}'] = None # Скидаємо при повороті
                 st.rerun()
         with c2:
             if st.button("↻", use_container_width=True, key=f"r_{file_id}"):
                 st.session_state[f'rot_{file_id}'] += 90
                 st.session_state[f'reset_{file_id}'] += 1
+                st.session_state[f'def_coords_{file_id}'] = None
                 st.rerun()
         
-        # B. Aspect Ratio
+        # Aspect Ratio
         aspect_choice = st.selectbox(
             T['lbl_aspect'], 
             list(ASPECT_RATIOS.keys()), 
@@ -107,59 +106,73 @@ def open_editor_dialog(fpath: str, T: dict):
         )
         aspect_val = ASPECT_RATIOS[aspect_choice]
         
-        # C. MAX Button (Forces reset)
-        if st.button("MAX ⛶", use_container_width=True, key=f"max_{file_id}", help="Reset box to center"):
+        # MAX BUTTON (Now Calculates!)
+        if st.button("MAX ⛶", use_container_width=True, key=f"max_{file_id}"):
+            # 1. Рахуємо ідеальні координати
+            max_box = get_max_box(orig_w, orig_h, aspect_val)
+            # 2. Записуємо їх у state
+            st.session_state[f'def_coords_{file_id}'] = max_box
+            # 3. Оновлюємо кропер
             st.session_state[f'reset_{file_id}'] += 1
             st.rerun()
             
         st.divider()
 
-    # --- LEFT PANEL (CANVAS) ---
+    # --- CANVAS ---
     with col_canvas:
         cropper_id = f"crp_{file_id}_{st.session_state[f'reset_{file_id}']}_{aspect_choice}"
         
-        # ВАЖЛИВО v6.7: 
-        # Ми передаємо ПОВНУ картинку (img_full), а не проксі.
-        # should_resize_image=True змушує бібліотеку саму вписати її в екран,
-        # але повертає координати ВІДНОСНО ОРИГІНАЛУ. Це найнадійніший спосіб.
+        # Беремо координати з кнопки MAX, якщо вони є
+        default_box = st.session_state.get(f'def_coords_{file_id}', None)
+        
         raw_rect = st_cropper(
             img_full,
             realtime_update=True,
             box_color='#FF0000',
             aspect_ratio=aspect_val,
             should_resize_image=True, 
+            default_coords=default_box, # <--- ТУТ МАГІЯ
             return_type='box',
             key=cropper_id
         )
 
-    # --- SAVE & STATS ---
+    # --- SAVE ---
     with col_controls:
-        # Валідація і обрізка координат (Clamping)
-        crop_box, real_w, real_h = clamp_coordinates(raw_rect, orig_w, orig_h)
+        crop_box, real_w, real_h = None, 0, 0
         
-        # Статистика
-        is_changed = (real_w != orig_w or real_h != orig_h)
-        color_tag = "orange" if is_changed else "green"
+        if raw_rect:
+            # Функція clamp (із v6.7) інтегрована сюди для простоти
+            left, top = int(raw_rect['left']), int(raw_rect['top'])
+            width, height = int(raw_rect['width']), int(raw_rect['height'])
+            
+            # Clamp limits
+            left = max(0, left)
+            top = max(0, top)
+            if left + width > orig_w: width = orig_w - left
+            if top + height > orig_h: height = orig_h - top
+            
+            crop_box = (left, top, left + width, top + height)
+            real_w, real_h = width, height
+        
         st.info(f"📏 **{real_w} x {real_h}** px")
         
         if st.button(T['btn_save_edit'], type="primary", use_container_width=True, key=f"sv_{file_id}"):
             try:
-                # Кроп по безпечних координатах
-                final_image = img_full.crop(crop_box)
-                
-                # Перезапис файлу
-                final_image.save(fpath, quality=95, subsampling=0)
-                
-                # Очистка кешів
-                thumb_path = f"{fpath}.thumb.jpg"
-                if os.path.exists(thumb_path): os.remove(thumb_path)
-                
-                # Закриваємо
-                del st.session_state[f'rot_{file_id}']
-                del st.session_state[f'reset_{file_id}']
-                st.session_state['close_editor'] = True
-                st.toast(T['msg_edit_saved'])
-                st.rerun()
+                if crop_box:
+                    final_image = img_full.crop(crop_box)
+                    final_image.save(fpath, quality=95, subsampling=0)
                     
+                    # Clean cache & state
+                    thumb_path = f"{fpath}.thumb.jpg"
+                    if os.path.exists(thumb_path): os.remove(thumb_path)
+                    
+                    # Clean specific keys
+                    keys_to_del = [f'rot_{file_id}', f'reset_{file_id}', f'def_coords_{file_id}']
+                    for k in keys_to_del:
+                        if k in st.session_state: del st.session_state[k]
+                    
+                    st.session_state['close_editor'] = True
+                    st.toast(T['msg_edit_saved'])
+                    st.rerun()
             except Exception as e:
                 st.error(f"Save Failed: {e}")
