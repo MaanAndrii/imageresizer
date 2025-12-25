@@ -514,4 +514,105 @@ with c_left:
                         wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
                     else:
                         wm_bytes = None
-                        if
+                        if wm_file: wm_bytes = wm_file.getvalue()
+                        elif st.session_state.get('preset_wm_bytes_key'): wm_bytes = st.session_state['preset_wm_bytes_key']
+                        if wm_bytes:
+                            wm_obj = engine.load_watermark_from_file(wm_bytes)
+                            wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                except Exception as e: st.error(T['error_wm_load'].format(e)); st.stop()
+                
+                resize_cfg = {
+                    'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
+                    'wm_scale': wm_scale, 'wm_margin': wm_margin if wm_pos!='tiled' else 0,
+                    'wm_gap': wm_gap if wm_pos=='tiled' else 0,
+                    'wm_position': wm_pos, 'wm_angle': wm_angle
+                }
+                results = []; report = []; zip_buffer = io.BytesIO()
+                
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
+                    futures = {}
+                    for i, fname in enumerate(process_list):
+                        fpath = files_map[fname]
+                        new_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), i+1)
+                        future = executor.submit(engine.process_image, fpath, new_fname, wm_obj, resize_cfg, out_fmt, quality)
+                        futures[future] = fname
+                    
+                    with zipfile.ZipFile(zip_buffer, "w") as zf:
+                        for i, fut in enumerate(concurrent.futures.as_completed(futures)):
+                            try:
+                                res_bytes, stats = fut.result()
+                                zf.writestr(stats['filename'], res_bytes)
+                                results.append((stats['filename'], res_bytes)); report.append(stats)
+                                del res_bytes; gc.collect()
+                            except Exception as e: st.error(f"Error {futures[fut]}: {e}")
+                            progress.progress((i+1)/len(process_list))
+                st.session_state['results'] = {'zip': zip_buffer.getvalue(), 'files': results, 'report': report}
+                st.toast(T['msg_done'], icon='🎉')
+
+    if 'results' in st.session_state and st.session_state['results']:
+        res = st.session_state['results']
+        st.success("Batch Processing Complete!")
+        st.download_button(T['btn_dl_zip'], res['zip'], "photos.zip", "application/zip", type="primary")
+        with st.expander(T['exp_dl_separate']):
+            for name, data in res['files']:
+                c1, c2 = st.columns([3, 1])
+                c1.write(f"📄 {name}"); c2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
+
+with c_right:
+    st.subheader(T['prev_header'])
+    selected_list = list(st.session_state['selected_files'])
+    target_file = selected_list[-1] if selected_list else None
+    
+    with st.container(border=True):
+        if target_file and target_file in files_map:
+            fpath = files_map[target_file]
+            
+            # --- OPEN EDITOR LOGIC (v5.12) ---
+            if st.button(T['btn_open_editor'], type="primary", use_container_width=True):
+                st.session_state['editing_file'] = fpath
+                st.session_state['close_editor'] = False
+                
+            # TRIGGER DIALOG IF STATE IS SET
+            if st.session_state.get('editing_file') == fpath and not st.session_state.get('close_editor'):
+                editor.open_editor_dialog(fpath, T)
+            
+            # Reset close state after rerun if needed
+            if st.session_state.get('close_editor'):
+                st.session_state['editing_file'] = None
+
+            # Normal Preview
+            wm_obj = None
+            try:
+                if wm_text.strip():
+                    font_path = None
+                    if selected_font_name: font_path = os.path.join(os.getcwd(), 'assets', 'fonts', selected_font_name)
+                    wm_obj = engine.create_text_watermark(wm_text, font_path, 100, wm_text_color)
+                    if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+                else:
+                    wm_bytes = None
+                    if wm_file: wm_bytes = wm_file.getvalue()
+                    elif st.session_state.get('preset_wm_bytes_key'): wm_bytes = st.session_state['preset_wm_bytes_key']
+                    if wm_bytes:
+                        wm_obj = engine.load_watermark_from_file(wm_bytes)
+                        if wm_obj: wm_obj = engine.apply_opacity(wm_obj, wm_opacity)
+            except: pass
+            
+            resize_cfg = {
+                'enabled': resize_on, 'mode': resize_mode, 'value': resize_val,
+                'wm_scale': wm_scale, 'wm_margin': wm_margin if wm_pos!='tiled' else 0,
+                'wm_gap': wm_gap if wm_pos=='tiled' else 0,
+                'wm_position': wm_pos, 'wm_angle': wm_angle
+            }
+            
+            try:
+                preview_fname = engine.generate_filename(fpath, naming_mode, prefix, out_fmt.lower(), 1)
+                prev_bytes, stats = engine.process_image(fpath, preview_fname, wm_obj, resize_cfg, out_fmt, quality)
+                
+                st.image(prev_bytes, caption=f"{stats['filename']}", use_container_width=True)
+                m1, m2 = st.columns(2)
+                delta_size = ((stats['new_size'] - stats['orig_size']) / stats['orig_size']) * 100
+                m1.metric(T['stat_res'], stats['new_res'], stats['scale_factor'])
+                m2.metric(T['stat_size'], f"{stats['new_size']/1024:.1f} KB", f"{delta_size:.1f}%", delta_color="inverse")
+            except Exception as e: st.error(f"Preview Error: {e}")
+        else:
+            st.markdown(f"""<div class="preview-placeholder"><span class="preview-icon">🖼️</span><p>{T['prev_placeholder']}</p></div>""", unsafe_allow_html=True)
