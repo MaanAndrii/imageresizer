@@ -4,11 +4,12 @@ from PIL import Image, ImageOps
 from streamlit_cropper import st_cropper
 
 """
-Editor Module v6.1 (Fix)
-------------------------
+Editor Module v6.2 (Stability Fix)
+----------------------------------
 Fixes:
-- Removed invalid argument 'lock_aspect_ratio' causing crash
-- Optimized imports
+- Disabled 'should_resize_image' to fix "Out of bounds" and coordinate drift.
+- Renamed "MAX" to "Reset" (limit of the library).
+- Improved Info Bar logic.
 """
 
 ASPECT_RATIOS = {
@@ -29,18 +30,18 @@ def get_file_info_str(fpath: str, img: Image.Image):
 
 @st.dialog("🛠 Editor", width="large")
 def open_editor_dialog(fpath: str, T: dict):
-    # --- SESSION STATE ---
     file_id = os.path.basename(fpath)
     
+    # State Init
     if f'rot_{file_id}' not in st.session_state: st.session_state[f'rot_{file_id}'] = 0
     if f'reset_{file_id}' not in st.session_state: st.session_state[f'reset_{file_id}'] = 0
 
-    # --- LOAD IMAGE ---
+    # Load Image
     try:
         img_original = Image.open(fpath)
         img_original = ImageOps.exif_transpose(img_original)
         
-        # Rotation in memory
+        # Apply Rotation (In Memory)
         current_angle = st.session_state[f'rot_{file_id}']
         if current_angle != 0:
             img_original = img_original.rotate(-current_angle, expand=True)
@@ -50,24 +51,24 @@ def open_editor_dialog(fpath: str, T: dict):
         st.error(f"Error: {e}")
         return
 
-    # 1. INFO BAR
+    # Info Bar
     st.caption(get_file_info_str(fpath, img_original))
 
-    # --- LAYOUT ---
+    # Layout
     col_canvas, col_controls = st.columns([3, 1], gap="small")
 
-    # --- RIGHT: CONTROLS ---
+    # --- CONTROLS ---
     with col_controls:
         # A. Rotate
-        c_rot1, c_rot2 = st.columns(2)
-        with c_rot1:
-            if st.button("↺", use_container_width=True, key=f"btn_l_{file_id}", help="-90°"):
-                st.session_state[f'rot_{file_id}'] = (st.session_state[f'rot_{file_id}'] - 90) % 360
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("↺", use_container_width=True, key=f"l_{file_id}", help="-90°"):
+                st.session_state[f'rot_{file_id}'] -= 90
                 st.session_state[f'reset_{file_id}'] += 1
                 st.rerun()
-        with c_rot2:
-            if st.button("↻", use_container_width=True, key=f"btn_r_{file_id}", help="+90°"):
-                st.session_state[f'rot_{file_id}'] = (st.session_state[f'rot_{file_id}'] + 90) % 360
+        with c2:
+            if st.button("↻", use_container_width=True, key=f"r_{file_id}", help="+90°"):
+                st.session_state[f'rot_{file_id}'] += 90
                 st.session_state[f'reset_{file_id}'] += 1
                 st.rerun()
         
@@ -76,41 +77,44 @@ def open_editor_dialog(fpath: str, T: dict):
             T['lbl_aspect'], 
             list(ASPECT_RATIOS.keys()), 
             label_visibility="collapsed",
-            key=f"aspect_{file_id}"
+            key=f"asp_{file_id}"
         )
         aspect_val = ASPECT_RATIOS[aspect_choice]
         
-        # C. MAX Button
-        if st.button("MAX ⛶", use_container_width=True, key=f"btn_max_{file_id}"):
+        # C. Reset Button (Rename from MAX)
+        if st.button("Reset ⛶", use_container_width=True, key=f"rst_{file_id}", help="Center crop box"):
             st.session_state[f'reset_{file_id}'] += 1
             st.rerun()
             
         st.divider()
 
-    # --- LEFT: CANVAS ---
+    # --- CANVAS ---
     with col_canvas:
-        cropper_key = f"cropper_{file_id}_{st.session_state[f'reset_{file_id}']}"
+        cropper_key = f"crp_{file_id}_{st.session_state[f'reset_{file_id}']}"
         
-        # FIXED: Removed 'lock_aspect_ratio' argument
+        # Вимикаємо should_resize_image=False, щоб працювати з реальними межами
         cropped_img = st_cropper(
             img_original,
             realtime_update=True,
-            box_color='#FF4B4B',
+            box_color='#FF0000',
             aspect_ratio=aspect_val,
-            # Якщо aspect_val задано, бібліотека сама заблокує пропорції
-            should_resize_image=True, 
+            should_resize_image=False, # FIX: Prevents "out of bounds" drift
             key=cropper_key
         )
 
-    # --- RIGHT: PREVIEW & SAVE ---
+    # --- PREVIEW & SAVE ---
     with col_controls:
+        # Preview
         st.image(cropped_img, use_container_width=True)
         
         new_w, new_h = cropped_img.size
-        color_tag = "red" if (new_w != orig_w or new_h != orig_h) else "green"
+        # Valid logic: if crop is essentially same as original (within small error), show green
+        is_changed = abs(new_w - orig_w) > 5 or abs(new_h - orig_h) > 5
+        color_tag = "red" if is_changed else "green"
+        
         st.caption(f"Result: :{color_tag}[{new_w}x{new_h}]")
         
-        if st.button(T['btn_save_edit'], type="primary", use_container_width=True, key=f"save_{file_id}"):
+        if st.button(T['btn_save_edit'], type="primary", use_container_width=True, key=f"sv_{file_id}"):
             try:
                 cropped_img.save(fpath, quality=95, subsampling=0)
                 
@@ -123,4 +127,4 @@ def open_editor_dialog(fpath: str, T: dict):
                 st.session_state['close_editor'] = True
                 st.rerun()
             except Exception as e:
-                st.error(f"Save failed: {e}")
+                st.error(f"Save error: {e}")
