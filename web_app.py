@@ -106,14 +106,23 @@ TRANSLATIONS = {
         "expander_add_files": "📤 Додати файли",
         "lang_select": "Мова інтерфейсу / Interface Language",
         
-        # Editor Keys (New)
+        # Editor Keys
         "btn_open_editor": "🛠 Відкрити редактор (Popup)",
         "lbl_aspect": "Пропорції",
         "btn_save_edit": "💾 Зберегти",
         "msg_edit_saved": "Зміни збережено!",
         "lbl_tools": "Інструменти",
-        "lbl_preview": "Результат"
+        "lbl_preview": "Результат",
         
+        # About Keys (ПОВЕРНУТО)
+        "about_expander": "ℹ️ Про програму",
+        "about_prod": "**Продукт:** Watermarker Pro MaAn v5.9",
+        "about_auth": "**Автор:** Marynyuk Andriy", 
+        "about_lic": "**Ліцензія:** Proprietary", 
+        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
+        "about_copy": "© 2025 Всі права захищено",
+        "about_changelog_title": "📝 Історія змін",
+        "about_changelog": "**v5.9 Advanced Editor:**\n- 🖼️ Покращений Popup Editor\n- 📐 Розділені зони (Canvas / Controls)\n- 📏 Статистика розміру в реальному часі"
     },
     "en": {
         "title": "📸 Watermarker Pro v5.9",
@@ -181,13 +190,23 @@ TRANSLATIONS = {
         "expander_add_files": "📤 Add Files",
         "lang_select": "Interface Language / Мова інтерфейсу",
         
-        # Editor Keys (New)
+        # Editor Keys
         "btn_open_editor": "🛠 Open Editor (Popup)",
         "lbl_aspect": "Aspect Ratio",
         "btn_save_edit": "💾 Save",
         "msg_edit_saved": "Changes saved!",
         "lbl_tools": "Tools",
-        "lbl_preview": "Result"
+        "lbl_preview": "Result",
+        
+        # About Keys (RESTORED)
+        "about_expander": "ℹ️ About",
+        "about_prod": "**Product:** Watermarker Pro MaAn v5.9",
+        "about_auth": "**Author:** Marynyuk Andriy", 
+        "about_lic": "**License:** Proprietary", 
+        "about_repo": "[GitHub Repository](https://github.com/MaanAndrii)", 
+        "about_copy": "© 2025 All rights reserved",
+        "about_changelog_title": "📝 Changelog",
+        "about_changelog": "**v5.9 Advanced Editor:**\n- 🖼️ Improved Popup Editor\n- 📐 Split Layout (Canvas / Controls)\n- 📏 Real-time Resolution Stats"
     }
 }
 
@@ -210,8 +229,6 @@ st.markdown("""
         background-color: #fafafa; margin-top: 10px;
     }
     .preview-icon { font-size: 40px; margin-bottom: 10px; display: block; }
-    /* Fix for modal width if needed */
-    div[data-testid="stDialog"] { min-width: 70vw; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -403,7 +420,7 @@ with st.sidebar:
     st.divider()
     if st.button(T['btn_defaults'], on_click=reset_settings, use_container_width=True): st.rerun()
     
-    with st.expander("ℹ️ About / Про програму", expanded=False):
+    with st.expander(T['about_expander'], expanded=False):
         st.markdown(T['about_prod'])
         st.markdown(T['about_auth'])
         st.markdown(T['about_lic'])
