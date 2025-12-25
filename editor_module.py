@@ -4,12 +4,11 @@ from PIL import Image, ImageOps
 from streamlit_cropper import st_cropper
 
 """
-Editor Module v6.2 (Stability Fix)
-----------------------------------
+Editor Module v6.3 (Display Fix)
+--------------------------------
 Fixes:
-- Disabled 'should_resize_image' to fix "Out of bounds" and coordinate drift.
-- Renamed "MAX" to "Reset" (limit of the library).
-- Improved Info Bar logic.
+- Re-enabled 'should_resize_image=True' to fix "Zoomed In" UI issue.
+- Added .convert('RGB') to fix blank canvas on load.
 """
 
 ASPECT_RATIOS = {
@@ -40,6 +39,9 @@ def open_editor_dialog(fpath: str, T: dict):
     try:
         img_original = Image.open(fpath)
         img_original = ImageOps.exif_transpose(img_original)
+        
+        # FIX: Convert to RGB ensures consistent display in browser
+        img_original = img_original.convert('RGB')
         
         # Apply Rotation (In Memory)
         current_angle = st.session_state[f'rot_{file_id}']
@@ -81,7 +83,7 @@ def open_editor_dialog(fpath: str, T: dict):
         )
         aspect_val = ASPECT_RATIOS[aspect_choice]
         
-        # C. Reset Button (Rename from MAX)
+        # C. Reset Button
         if st.button("Reset ⛶", use_container_width=True, key=f"rst_{file_id}", help="Center crop box"):
             st.session_state[f'reset_{file_id}'] += 1
             st.rerun()
@@ -92,13 +94,13 @@ def open_editor_dialog(fpath: str, T: dict):
     with col_canvas:
         cropper_key = f"crp_{file_id}_{st.session_state[f'reset_{file_id}']}"
         
-        # Вимикаємо should_resize_image=False, щоб працювати з реальними межами
+        # FIX: should_resize_image=True змушує фото вписатись в ширину колонки
         cropped_img = st_cropper(
             img_original,
             realtime_update=True,
             box_color='#FF0000',
             aspect_ratio=aspect_val,
-            should_resize_image=False, # FIX: Prevents "out of bounds" drift
+            should_resize_image=True, 
             key=cropper_key
         )
 
@@ -108,7 +110,6 @@ def open_editor_dialog(fpath: str, T: dict):
         st.image(cropped_img, use_container_width=True)
         
         new_w, new_h = cropped_img.size
-        # Valid logic: if crop is essentially same as original (within small error), show green
         is_changed = abs(new_w - orig_w) > 5 or abs(new_h - orig_h) > 5
         color_tag = "red" if is_changed else "green"
         
