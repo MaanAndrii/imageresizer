@@ -106,7 +106,6 @@ TRANSLATIONS = {
         "expander_add_files": "📤 Додати файли",
         "lang_select": "Мова інтерфейсу / Interface Language",
         
-        # Editor Keys
         "btn_open_editor": "🛠 Відкрити редактор (Popup)",
         "lbl_aspect": "Пропорції",
         "btn_save_edit": "💾 Зберегти",
@@ -189,7 +188,6 @@ TRANSLATIONS = {
         "expander_add_files": "📤 Add Files",
         "lang_select": "Interface Language / Мова інтерфейсу",
         
-        # Editor Keys
         "btn_open_editor": "🛠 Open Editor (Popup)",
         "lbl_aspect": "Aspect Ratio",
         "btn_save_edit": "💾 Save",
@@ -236,7 +234,6 @@ if 'file_cache' not in st.session_state: st.session_state['file_cache'] = {}
 if 'selected_files' not in st.session_state: st.session_state['selected_files'] = set()
 if 'uploader_key' not in st.session_state: st.session_state['uploader_key'] = 0
 if 'lang_code' not in st.session_state: st.session_state['lang_code'] = 'ua'
-# NEW: Editing state
 if 'editing_file' not in st.session_state: st.session_state['editing_file'] = None
 if 'close_editor' not in st.session_state: st.session_state['close_editor'] = False
 
@@ -354,7 +351,8 @@ with st.sidebar:
                 res = apply_settings_from_json(uploaded_preset)
                 if res is True:
                     st.session_state[f"processed_{uploaded_preset.name}"] = True
-                    st.success(T['msg_preset_loaded']); st.rerun()
+                    st.success(T['msg_preset_loaded'])
+                    st.rerun()
                 else: st.error(T['error_preset'].format(res))
         st.divider()
         current_wm_file = st.session_state.get('wm_uploader_obj') 
@@ -432,9 +430,15 @@ with st.sidebar:
         st.caption(T['lang_select'])
         lc1, lc2 = st.columns(2)
         with lc1:
-            if st.button("🇺🇦 UA", type="primary" if lang_code=='ua' else "secondary", use_container_width=True): st.session_state['lang_code']='ua'; st.rerun()
+            btn_ua_type = "primary" if lang_code == 'ua' else "secondary"
+            if st.button("🇺🇦 UA", type=btn_ua_type, use_container_width=True):
+                st.session_state['lang_code'] = 'ua'
+                st.rerun()
         with lc2:
-            if st.button("🇺🇸 EN", type="primary" if lang_code=='en' else "secondary", use_container_width=True): st.session_state['lang_code']='en'; st.rerun()
+            btn_en_type = "primary" if lang_code == 'en' else "secondary"
+            if st.button("🇺🇸 EN", type=btn_en_type, use_container_width=True):
+                st.session_state['lang_code'] = 'en'
+                st.rerun()
 
 st.title(T['title'])
 c_left, c_right = st.columns([1.8, 1], gap="large")
@@ -470,15 +474,20 @@ with c_left:
     if files_names:
         act1, act2, act3 = st.columns([1, 1, 1])
         with act1:
-            if st.button(T['grid_select_all'], use_container_width=True): st.session_state['selected_files'] = set(files_names); st.rerun()
+            if st.button(T['grid_select_all'], use_container_width=True):
+                st.session_state['selected_files'] = set(files_names)
+                st.rerun()
         with act2:
-            if st.button(T['grid_deselect_all'], use_container_width=True): st.session_state['selected_files'].clear(); st.rerun()
+            if st.button(T['grid_deselect_all'], use_container_width=True):
+                st.session_state['selected_files'].clear()
+                st.rerun()
         with act3:
             sel_count = len(st.session_state['selected_files'])
             if st.button(f"{T['grid_delete']} ({sel_count})", type="primary", use_container_width=True, disabled=sel_count==0):
                 for f in list(st.session_state['selected_files']):
                     if f in files_map: del files_map[f]
-                st.session_state['selected_files'].clear(); st.rerun()
+                st.session_state['selected_files'].clear()
+                st.rerun()
         
         st.divider()
         cols_count = 4
@@ -492,7 +501,11 @@ with c_left:
                 if thumb: st.image(thumb, use_container_width=True)
                 else: st.warning("Error")
                 is_sel = fname in st.session_state['selected_files']
-                if st.button(T['btn_selected'] if is_sel else T['btn_select'], key=f"btn_{fname}", type="primary" if is_sel else "secondary", use_container_width=True):
+                
+                # --- Fixed button layout ---
+                btn_type = "primary" if is_sel else "secondary"
+                btn_label = T['btn_selected'] if is_sel else T['btn_select']
+                if st.button(btn_label, key=f"btn_{fname}", type=btn_type, use_container_width=True):
                     if is_sel: st.session_state['selected_files'].remove(fname)
                     else: st.session_state['selected_files'].add(fname)
                     st.rerun()
@@ -542,8 +555,10 @@ with c_left:
                             try:
                                 res_bytes, stats = fut.result()
                                 zf.writestr(stats['filename'], res_bytes)
-                                results.append((stats['filename'], res_bytes)); report.append(stats)
-                                del res_bytes; gc.collect()
+                                results.append((stats['filename'], res_bytes))
+                                report.append(stats)
+                                del res_bytes
+                                gc.collect()
                             except Exception as e: st.error(f"Error {futures[fut]}: {e}")
                             progress.progress((i+1)/len(process_list))
                 st.session_state['results'] = {'zip': zip_buffer.getvalue(), 'files': results, 'report': report}
@@ -556,7 +571,8 @@ with c_left:
         with st.expander(T['exp_dl_separate']):
             for name, data in res['files']:
                 c1, c2 = st.columns([3, 1])
-                c1.write(f"📄 {name}"); c2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
+                c1.write(f"📄 {name}")
+                c2.download_button("⬇️", data, file_name=name, key=f"dl_{name}")
 
 with c_right:
     st.subheader(T['prev_header'])
@@ -567,7 +583,7 @@ with c_right:
         if target_file and target_file in files_map:
             fpath = files_map[target_file]
             
-            # --- OPEN EDITOR LOGIC (v5.12) ---
+            # --- POPUP TRIGGER ---
             if st.button(T['btn_open_editor'], type="primary", use_container_width=True):
                 st.session_state['editing_file'] = fpath
                 st.session_state['close_editor'] = False
