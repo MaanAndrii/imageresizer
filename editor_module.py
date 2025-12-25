@@ -4,12 +4,11 @@ from PIL import Image, ImageOps
 from streamlit_cropper import st_cropper
 
 """
-Editor Module v6.4 (Proxy Image Logic)
---------------------------------------
+Editor Module v6.5 (Stable Coordinates)
+---------------------------------------
 Fixes:
-1. "Image too big": Uses a resized proxy for UI, applies crop to high-res original.
-2. "Out of bounds": UI image fits container perfectly.
-3. "Quality": Final crop is done on the original 100% quality image.
+- Replaced invalid 'box=True' with 'return_type="box"'.
+- Preserves high-quality crop using Proxy logic.
 """
 
 ASPECT_RATIOS = {
@@ -35,7 +34,7 @@ def resize_for_ui(img: Image.Image, max_width: int = 700):
         ratio = max_width / w
         new_h = int(h * ratio)
         img_ui = img.resize((max_width, new_h), Image.Resampling.LANCZOS)
-        return img_ui, ratio
+        return img_ui, 1/ratio # Коефіцієнт: скільки оригінальних пікселів в 1 пікселі UI
     return img, 1.0
 
 @st.dialog("🛠 Editor", width="large")
@@ -50,7 +49,7 @@ def open_editor_dialog(fpath: str, T: dict):
     try:
         img_orig = Image.open(fpath)
         img_orig = ImageOps.exif_transpose(img_orig)
-        img_orig = img_orig.convert('RGB') # Fix for indexed colors/transparency
+        img_orig = img_orig.convert('RGB')
         
         # Apply Rotation to Original (Virtual)
         current_angle = st.session_state[f'rot_{file_id}']
@@ -62,7 +61,7 @@ def open_editor_dialog(fpath: str, T: dict):
         return
 
     # 2. CREATE PROXY (UI IMAGE)
-    # Ми показуємо користувачу зменшену версію, щоб вона влазила в екран
+    # scale_factor показує, у скільки разів оригінал більший за UI-картинку
     img_ui, scale_factor = resize_for_ui(img_orig, max_width=700)
 
     # Info Bar
@@ -96,7 +95,7 @@ def open_editor_dialog(fpath: str, T: dict):
         aspect_val = ASPECT_RATIOS[aspect_choice]
         
         # Reset
-        if st.button("Reset ⛶", use_container_width=True, key=f"rst_{file_id}", help="Скинути рамку"):
+        if st.button("Reset ⛶", use_container_width=True, key=f"rst_{file_id}"):
             st.session_state[f'reset_{file_id}'] += 1
             st.rerun()
             
@@ -106,36 +105,44 @@ def open_editor_dialog(fpath: str, T: dict):
     with col_canvas:
         cropper_key = f"crp_{file_id}_{st.session_state[f'reset_{file_id}']}"
         
-        # ВАЖЛИВО: box=True повертає координати, а не картинку!
-        # should_resize_image=False, тому що ми вже самі зробили ресайз (img_ui)
+        # FIX: return_type='box' повертає координати {left, top, width, height}
+        # should_resize_image=False, бо ми вже самі зробили ресайз (img_ui)
         crop_rect = st_cropper(
             img_ui,
             realtime_update=True,
             box_color='#FF0000',
             aspect_ratio=aspect_val,
             should_resize_image=False, 
-            box=True, # Повертає словник {left, top, width, height}
+            return_type='box', # <--- FIXED PARAMETER
             key=cropper_key
         )
 
     # --- SAVE LOGIC ---
     with col_controls:
-        # Розраховуємо реальні розміри кропу
-        # Координати з UI (crop_rect) ділимо на scale_factor, щоб отримати координати Оригіналу
+        # Обчислюємо реальні розміри для прев'ю тексту
+        real_w, real_h = 0, 0
         if crop_rect:
-            real_left = int(crop_rect['left'] / scale_factor)
-            real_top = int(crop_rect['top'] / scale_factor)
-            real_width = int(crop_rect['width'] / scale_factor)
-            real_height = int(crop_rect['height'] / scale_factor)
-            
-            # Прев'ю розміру
-            st.markdown(f"📏 **{real_width} x {real_height}** px")
-            
-            # Кнопка збереження
-            if st.button(T['btn_save_edit'], type="primary", use_container_width=True, key=f"sv_{file_id}"):
-                try:
-                    # Кропаємо ОРИГІНАЛ
-                    crop_box = (real_left, real_top, real_left + real_width, real_top + real_height)
+            real_w = int(crop_rect['width'] * scale_factor)
+            real_h = int(crop_rect['height'] * scale_factor)
+        
+        # Показуємо розміри
+        st.markdown(f"📏 **{real_w} x {real_h}** px")
+        
+        # Кнопка збереження
+        if st.button(T['btn_save_edit'], type="primary", use_container_width=True, key=f"sv_{file_id}"):
+            try:
+                # Кропаємо ОРИГІНАЛ за перерахованими координатами
+                if crop_rect:
+                    left = int(crop_rect['left'] * scale_factor)
+                    top = int(crop_rect['top'] * scale_factor)
+                    width = int(crop_rect['width'] * scale_factor)
+                    height = int(crop_rect['height'] * scale_factor)
+                    
+                    # Захист від виходу за межі (хоча математично має бути ок)
+                    left = max(0, left)
+                    top = max(0, top)
+                    
+                    crop_box = (left, top, left + width, top + height)
                     final_image = img_orig.crop(crop_box)
                     
                     # Зберігаємо
@@ -144,11 +151,13 @@ def open_editor_dialog(fpath: str, T: dict):
                     # Чистимо сміття
                     thumb_path = f"{fpath}.thumb.jpg"
                     if os.path.exists(thumb_path): os.remove(thumb_path)
-                    del st.session_state[f'rot_{file_id}']
-                    del st.session_state[f'reset_{file_id}']
+                    
+                    # Очищаємо сесію редактора
+                    if f'rot_{file_id}' in st.session_state: del st.session_state[f'rot_{file_id}']
+                    if f'reset_{file_id}' in st.session_state: del st.session_state[f'reset_{file_id}']
                     
                     st.session_state['close_editor'] = True
                     st.toast(T['msg_edit_saved'])
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Save error: {e}")
+            except Exception as e:
+                st.error(f"Save error: {e}")
